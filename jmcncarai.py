@@ -530,37 +530,48 @@ def drive_example(c):
     '''This is only an example. It will get around the track but the
     correct thing to do is write your own `drive()` function.'''
     S,R= c.S.d,c.R.d
-    target_speed=50
+    target_speed=160
 
     # Steer To Corner
-    R['steer']= S['angle']*15 / PI
+    R['steer']= S['angle']*25 / PI
     # Steer To Center
-    R['steer']-= S['trackPos']*.10
+    R['steer']-= S['trackPos']*.25
 
     # Throttle Control
-    if S['speedX'] < target_speed - (R['steer']*50):
-        R['accel']+= .01
+    R['accel'] = max(0.0, min(1.0, R['accel']))
+    
+#if abs(S['angle']) > 0.35:
+ #   R['brake'] = 0.3
+  #  R['accel'] = 0.0
+#else:
+ #   R['brake'] = 0.0
+  #  R['accel'] = 1.0  # Full throttle on straights
+
+    if S['speedX'] < target_speed - (R['steer']*2.5):
+        R['accel']+= .4
     else:
-        R['accel']-= .01
+        R['accel']-= .2
     if S['speedX']<10:
        R['accel']+= 1/(S['speedX']+.1)
 
     # Traction Control System
     if ((S['wheelSpinVel'][2]+S['wheelSpinVel'][3]) -
-       (S['wheelSpinVel'][0]+S['wheelSpinVel'][1]) > 5):
-       R['accel']-= .2
+       (S['wheelSpinVel'][0]+S['wheelSpinVel'][1]) > 2):
+       R['accel']-= 0.1
+
+
 
     # Automatic Transmission
     R['gear']=1
-    if S['speedX']>50:
+    if S['speedX']>60:
         R['gear']=2
-    if S['speedX']>80:
+    if S['speedX']>100:
         R['gear']=3
-    if S['speedX']>110:
-        R['gear']=4
     if S['speedX']>140:
+        R['gear']=4
+    if S['speedX']>190:
         R['gear']=5
-    if S['speedX']>170:
+    if S['speedX']>220:
         R['gear']=6
     return
 
