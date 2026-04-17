@@ -8,4 +8,9 @@ dependencies = [
 	"gym",
 	"numpy",
 	"matplotlib",
+	"gymnasium>=1.2.3",
+	"stable-baselines3>=2.8.0",
+	"tensorboard>=2.19.0",
+	"wandb>=0.19.11",
+	"rl-zoo3>=2.3.0",
 ]
