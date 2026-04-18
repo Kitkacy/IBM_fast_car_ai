@@ -140,6 +140,16 @@ class Client():
         self.R= DriverAction()
         self.setup_connection()
 
+    def _relaunch_torcs(self):
+        os.system('pkill torcs')
+        time.sleep(1.0)
+        cmd = 'torcs -nofuel -nodamage -nolaptime'
+        if self.vision:
+            cmd += ' -vision'
+        os.system(cmd + ' &')
+        time.sleep(1.0)
+        os.system('sh autostart.sh')
+
     def setup_connection(self):
         # == Set Up UDP Socket ==
         try:
@@ -172,15 +182,7 @@ class Client():
                 print("Count Down : " + str(n_fail))
                 if n_fail < 0:
                     print("relaunch torcs")
-                    os.system('pkill torcs')
-                    time.sleep(1.0)
-                    if self.vision is False:
-                        os.system('torcs -nofuel -nodamage -nolaptime &')
-                    else:
-                        os.system('torcs -nofuel -nodamage -nolaptime -vision &')
-
-                    time.sleep(1.0)
-                    os.system('sh autostart.sh')
+                    self._relaunch_torcs()
                     n_fail = 5
                 n_fail -= 1
 

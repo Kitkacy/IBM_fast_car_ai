@@ -1,31 +1,14 @@
 #!/usr/bin/python
 # Windows-friendly snakeoil client for TORCS SCR server.
 
-import getopt
 import socket
-import subprocess
 import sys
-import time
 from pathlib import Path
+
+from torcs_process_manager import launch_torcs_process
 
 PI = 3.14159265359
 data_size = 2**17
-
-ophelp = "Options:\n"
-ophelp += " --host, -H <host>    TORCS server host. [localhost]\n"
-ophelp += " --port, -p <port>    TORCS port. [3001]\n"
-ophelp += " --id, -i <id>        ID for server. [SCR]\n"
-ophelp += " --steps, -m <#>      Maximum simulation steps. 1 sec ~ 50 steps. [100000]\n"
-ophelp += " --episodes, -e <#>   Maximum learning episodes. [1]\n"
-ophelp += " --track, -t <track>  Your name for this track. Used for learning. [unknown]\n"
-ophelp += " --stage, -s <#>      0=warm up, 1=qualifying, 2=race, 3=unknown. [3]\n"
-ophelp += " --debug, -d          Output full telemetry.\n"
-ophelp += " --help, -h           Show this help.\n"
-ophelp += " --version, -v        Show current version."
-usage = "Usage: %s [ophelp [optargs]] \n" % sys.argv[0]
-usage = usage + ophelp
-version = "20130505-2-win"
-
 
 def clip(v, lo, hi):
     if v < lo:
@@ -73,53 +56,29 @@ def bargraph(x, mn, mx, w, c="X"):
 class Client:
     def __init__(
         self,
-        H=None,
         p=None,
-        i=None,
-        e=None,
-        t=None,
-        s=None,
-        d=None,
         vision=False,
         torcs_exe=r"C:\Users\szymo\source\repos\torcs\torcs\wtorcs.exe",
-        autostart_script="autostart_windows.bat",
-        start_script="start_torcs_windows.bat",
         launch_log="torcs_launcher.log",
-        relaunch_on_fail=False,
+        race_config=r"C:\Users\szymo\source\repos\torcs\torcs\config\raceman\practice.xml",
         launch_on_start=True,
     ):
         self.vision = vision
         self.torcs_exe = torcs_exe
-        self.relaunch_on_fail = relaunch_on_fail
         self.launch_on_start = launch_on_start
-        self.autostart_script = Path(__file__).resolve().parent / autostart_script
-        self.start_script = Path(__file__).resolve().parent / start_script
         self.launch_log = Path(__file__).resolve().parent / launch_log
+        self.autostart_script = Path(__file__).resolve().parent / "autostart_windows.ps1"
+        self.race_config = str(Path(race_config).expanduser()) if race_config else ""
 
         self.host = "localhost"
         self.port = 3001
         self.sid = "SCR"
-        self.maxEpisodes = 1
-        self.trackname = "unknown"
-        self.stage = 3
         self.debug = False
         self.maxSteps = 100000
+        self.torcs_pid = None
 
-        self.parse_the_command_line()
-        if H:
-            self.host = H
         if p:
             self.port = p
-        if i:
-            self.sid = i
-        if e:
-            self.maxEpisodes = e
-        if t:
-            self.trackname = t
-        if s:
-            self.stage = s
-        if d:
-            self.debug = d
 
         self.S = ServerState()
         self.R = DriverAction()
@@ -127,65 +86,17 @@ class Client:
             self._launch_torcs_windows()
         self.setup_connection()
 
-    def _torcs_exec_context(self):
-        torcs_path = Path(self.torcs_exe).expanduser()
-        torcs_cwd = torcs_path.parent if torcs_path.parent.exists() else None
-        return torcs_path, torcs_cwd
-
     def _launch_torcs_windows(self):
-        torcs_path, _torcs_cwd = self._torcs_exec_context()
-        if self.start_script.exists():
-            cmd = [
-                "cmd",
-                "/c",
-                str(self.start_script),
-                str(torcs_path),
-                str(self.autostart_script),
-                "vision" if self.vision else "novision",
-                str(self.launch_log),
-            ]
-            subprocess.run(
-                cmd,
-                stdout=subprocess.DEVNULL,
-                stderr=subprocess.DEVNULL,
-                check=False,
-            )
-        else:
-            # Fallback: still try to kill before launch even if the script is missing.
-            subprocess.run(
-                ["taskkill", "/IM", "wtorcs.exe", "/F", "/T"],
-                stdout=subprocess.DEVNULL,
-                stderr=subprocess.DEVNULL,
-                check=False,
-            )
-            subprocess.run(
-                ["taskkill", "/IM", "torcs.exe", "/F", "/T"],
-                stdout=subprocess.DEVNULL,
-                stderr=subprocess.DEVNULL,
-                check=False,
-            )
-            time.sleep(0.7)
-            args = [str(torcs_path), "-nofuel", "-nodamage", "-nolaptime"]
-            if self.vision:
-                args.append("-vision")
-            subprocess.Popen(
-                args,
-                cwd=str(torcs_path.parent),
-                stdout=subprocess.DEVNULL,
-                stderr=subprocess.DEVNULL,
-                creationflags=getattr(subprocess, "CREATE_NEW_PROCESS_GROUP", 0),
-            )
-            time.sleep(0.9)
-            if self.autostart_script.exists():
-                subprocess.run(
-                    ["cmd", "/c", str(self.autostart_script)],
-                    stdout=subprocess.DEVNULL,
-                    stderr=subprocess.DEVNULL,
-                    check=False,
-                )
-
-    def _restart_torcs_windows(self):
-        self._launch_torcs_windows()
+        torcs_path = Path(self.torcs_exe).expanduser()
+        self.torcs_pid = launch_torcs_process(
+            torcs_exe=str(torcs_path),
+            port=self.port,
+            vision=self.vision,
+            race_config=self.race_config,
+            log_file=str(self.launch_log),
+            autostart_script=str(self.autostart_script),
+            existing_pid=self.torcs_pid,
+        )
 
     def setup_connection(self):
         try:
@@ -212,67 +123,11 @@ class Client:
                 sockdata = sockdata.decode("utf-8")
             except socket.error:
                 if n_fail < 0:
-                    if self.relaunch_on_fail:
-                        self._restart_torcs_windows()
                     n_fail = 5
                 n_fail -= 1
 
             if "***identified***" in sockdata:
                 break
-
-    def parse_the_command_line(self):
-        try:
-            (opts, args) = getopt.getopt(
-                sys.argv[1:],
-                "H:p:i:m:e:t:s:dhv",
-                [
-                    "host=",
-                    "port=",
-                    "id=",
-                    "steps=",
-                    "episodes=",
-                    "track=",
-                    "stage=",
-                    "debug",
-                    "help",
-                    "version",
-                ],
-            )
-        except getopt.error as why:
-            print("getopt error: %s\n%s" % (why, usage))
-            sys.exit(-1)
-
-        try:
-            for opt in opts:
-                if opt[0] in ("-h", "--help"):
-                    print(usage)
-                    sys.exit(0)
-                if opt[0] in ("-d", "--debug"):
-                    self.debug = True
-                if opt[0] in ("-H", "--host"):
-                    self.host = opt[1]
-                if opt[0] in ("-i", "--id"):
-                    self.sid = opt[1]
-                if opt[0] in ("-t", "--track"):
-                    self.trackname = opt[1]
-                if opt[0] in ("-s", "--stage"):
-                    self.stage = int(opt[1])
-                if opt[0] in ("-p", "--port"):
-                    self.port = int(opt[1])
-                if opt[0] in ("-e", "--episodes"):
-                    self.maxEpisodes = int(opt[1])
-                if opt[0] in ("-m", "--steps"):
-                    self.maxSteps = int(opt[1])
-                if opt[0] in ("-v", "--version"):
-                    print("%s %s" % (sys.argv[0], version))
-                    sys.exit(0)
-        except ValueError as why:
-            print("Bad parameter '%s' for option %s: %s\n%s" % (opt[1], opt[0], why, usage))
-            sys.exit(-1)
-
-        if len(args) > 0:
-            print("Superflous input? %s\n%s" % (", ".join(args), usage))
-            sys.exit(-1)
 
     def get_servers_input(self):
         if not self.so:

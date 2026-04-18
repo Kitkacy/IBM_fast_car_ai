@@ -1,7 +1,6 @@
 import copy
 import argparse
 import json
-import subprocess
 import time
 from pathlib import Path
 
@@ -14,6 +13,7 @@ from stable_baselines3.common.callbacks import CallbackList, CheckpointCallback,
 from stable_baselines3.common.evaluation import evaluate_policy
 from stable_baselines3.common.monitor import Monitor
 from stable_baselines3.common.vec_env import DummyVecEnv, VecMonitor
+from torcs_process_manager import kill_torcs_process, launch_torcs_process
 
 try:
     import wandb
@@ -35,12 +35,12 @@ class TorcsEnvWindowsRL(gym.Env):
         self,
         vision=False,
         target_speed=60.0,
+        port=3001,
         obs_norm=True,
         obs_norm_clip=5.0,
         obs_norm_eps=1e-6,
         torcs_exe=r"C:\Users\szymo\source\repos\torcs\torcs\wtorcs.exe",
-        autostart_script="autostart_windows.ps1",
-        start_script="start_torcs_windows.ps1",
+        race_config=r"C:\Users\szymo\source\repos\torcs\torcs\config\raceman\practice.xml",
         launch_log="torcs_launcher.log",
     ):
         self.vision = bool(vision)
@@ -53,16 +53,24 @@ class TorcsEnvWindowsRL(gym.Env):
         self.obs_norm_clip = float(obs_norm_clip)
         self.obs_norm_eps = float(obs_norm_eps)
 
-        self.port = 3001
+        self.port = int(port)
         self.torcs_exe = str(Path(torcs_exe).expanduser())
-        self.script_path = Path(__file__).resolve().parent / autostart_script
-        self.start_script = Path(__file__).resolve().parent / start_script
+        self.race_config = str(Path(race_config).expanduser()) if race_config else ""
         self.launch_log = Path(__file__).resolve().parent / launch_log
+        self.autostart_script = Path(__file__).resolve().parent / "autostart_windows.ps1"
+        self.torcs_pid = None
 
         self.initial_reset = True
         self.time_step = 0
 
-        self.client = snakeoil3.Client(p=self.port, vision=self.vision)
+        self.client = snakeoil3.Client(
+            p=self.port,
+            vision=self.vision,
+            torcs_exe=self.torcs_exe,
+            launch_log=str(self.launch_log),
+            race_config=self.race_config,
+        )
+        self.torcs_pid = getattr(self.client, "torcs_pid", None)
         self.client.MAX_STEPS = np.inf
         self.client.get_servers_input()
 
@@ -88,7 +96,14 @@ class TorcsEnvWindowsRL(gym.Env):
             self.client.R.d["meta"] = True
             self.client.respond_to_server()
 
-        self.client = snakeoil3.Client(p=self.port, vision=self.vision)
+        self.client = snakeoil3.Client(
+            p=self.port,
+            vision=self.vision,
+            torcs_exe=self.torcs_exe,
+            launch_log=str(self.launch_log),
+            race_config=self.race_config,
+        )
+        self.torcs_pid = getattr(self.client, "torcs_pid", None)
         self.client.MAX_STEPS = np.inf
         self.client.get_servers_input()
 
@@ -143,66 +158,22 @@ class TorcsEnvWindowsRL(gym.Env):
         time.sleep(0.5)
 
     def _kill_torcs(self):
-        subprocess.run(
-            ["taskkill", "/IM", "wtorcs.exe", "/F", "/T"],
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
-            check=False,
-        )
-        subprocess.run(
-            ["taskkill", "/IM", "torcs.exe", "/F", "/T"],
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
-            check=False,
-        )
-
-    def _launch_torcs(self):
-        if self.start_script.exists():
-            cmd = [
-                "powershell",
-                "-NoProfile",
-                "-ExecutionPolicy",
-                "Bypass",
-                "-File",
-                str(self.start_script),
-                self.torcs_exe,
-                str(self.script_path),
-                "vision" if self.vision else "novision",
-                str(self.launch_log),
-                "foreground",
-            ]
-            subprocess.run(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=False)
+        if self.torcs_pid is None:
             return
 
-        self._kill_torcs()
-        time.sleep(0.7)
-        args = [self.torcs_exe, "-nofuel", "-nodamage", "-nolaptime"]
-        if self.vision:
-            args.append("-vision")
+        kill_torcs_process(self.torcs_pid, log_file=str(self.launch_log), port=self.port)
+        self.torcs_pid = None
 
-        subprocess.Popen(
-            args,
-            cwd=str(Path(self.torcs_exe).parent),
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
-            creationflags=getattr(subprocess, "CREATE_NEW_PROCESS_GROUP", 0),
+    def _launch_torcs(self):
+        self.torcs_pid = launch_torcs_process(
+            torcs_exe=self.torcs_exe,
+            port=self.port,
+            vision=self.vision,
+            race_config=self.race_config,
+            log_file=str(self.launch_log),
+            autostart_script=str(self.autostart_script),
+            existing_pid=self.torcs_pid,
         )
-
-        time.sleep(0.9)
-        if self.script_path.exists():
-            subprocess.run(
-                [
-                    "powershell",
-                    "-NoProfile",
-                    "-ExecutionPolicy",
-                    "Bypass",
-                    "-File",
-                    str(self.script_path),
-                ],
-                stdout=subprocess.DEVNULL,
-                stderr=subprocess.DEVNULL,
-                check=False,
-            )
 
     def _agent_to_torcs(self, action):
         steer = float(np.clip(np.asarray(action, dtype=np.float32)[0], -1.0, 1.0))
@@ -308,17 +279,17 @@ class TorcsEnvWindowsRL(gym.Env):
 
 def _parse_args():
     parser = argparse.ArgumentParser(description="Train/evaluate TORCS with SB3 + TensorBoard/WandB")
-    parser.add_argument("--timesteps", type=int, default=100_000, help="Total PPO training steps")
+    parser.add_argument("--timesteps", type=int, default=6_000, help="Total PPO training steps")
     parser.add_argument("--run-name", type=str, default="torcs-ppo", help="Run name for logs and WandB")
     parser.add_argument("--log-dir", type=Path, default=Path("runs"), help="Base output directory")
-    parser.add_argument("--target-speed", type=float, default=60.0, help="Target speed controller setpoint")
+    parser.add_argument("--target-speed", type=float, default=100.0, help="Target speed controller setpoint")
     parser.add_argument("--vision", action="store_true", help="Enable TORCS vision observations")
     parser.add_argument("--seed", type=int, default=42, help="Random seed")
     parser.add_argument("--eval-episodes", type=int, default=3, help="Episodes for final evaluation")
     parser.add_argument("--wandb", action="store_true", help="Enable Weights & Biases logging")
     parser.add_argument("--wandb-project", type=str, default="gym-torcs", help="WandB project")
     parser.add_argument("--wandb-entity", type=str, default=None, help="WandB entity/team")
-    parser.add_argument("--checkpoint-freq", type=int, default=10_000, help="Checkpoint frequency in env steps")
+    parser.add_argument("--checkpoint-freq", type=int, default=2_000, help="Checkpoint frequency in env steps")
     return parser.parse_args()
 
 
@@ -348,14 +319,6 @@ def _build_ppo_kwargs(seed):
     }
 
 
-def _make_env(target_speed, vision):
-    def _factory():
-        env = TorcsEnvWindowsRL(vision=vision, target_speed=target_speed)
-        return Monitor(env)
-
-    return _factory
-
-
 def train_and_evaluate(args):
     run_dir = args.log_dir / args.run_name
     tb_dir = run_dir / "tensorboard"
@@ -364,17 +327,56 @@ def train_and_evaluate(args):
     model_dir = run_dir / "models"
     for directory in (tb_dir, ckpt_dir, eval_dir, model_dir):
         directory.mkdir(parents=True, exist_ok=True)
+    #race_config = Path(r"C:\Users\szymo\source\repos\torcs\torcs\config\raceman\practice.xml")
+    race_config = None
 
-    train_env = VecMonitor(DummyVecEnv([_make_env(args.target_speed, args.vision)]), filename=str(run_dir / "train_monitor.csv"))
-    eval_env = VecMonitor(DummyVecEnv([_make_env(args.target_speed, args.vision)]), filename=str(run_dir / "eval_monitor.csv"))
+    train_env = VecMonitor(
+        DummyVecEnv(
+            [
+                lambda: Monitor(
+                    TorcsEnvWindowsRL(
+                        vision=args.vision,
+                        target_speed=args.target_speed,
+                        port=3001,
+                        race_config=str(race_config) if race_config else None,
+                    )
+                )
+            ]
+        ),
+        filename=str(run_dir / "train_monitor.csv"),
+    )
+    # Using a separate env for periodic EvalCallback would relaunch TORCS and
+    # kill the train process (start script taskkills existing wtorcs). Reuse
+    # train_env for callback-time eval and keep separate env only for final eval.
 
+    eval_race_config = Path(r"C:\Users\szymo\source\repos\torcs\torcs\config\raceman\practice_2.xml")
+    eval_race_config = None
+    eval_env = VecMonitor(
+        DummyVecEnv(
+            [
+                lambda: Monitor(
+                    TorcsEnvWindowsRL(
+                        vision=args.vision,
+                        target_speed=args.target_speed,
+                        port=3001,
+                        race_config=str(eval_race_config) if eval_race_config else None,
+                    )
+                )
+            ]
+        ),
+        filename=str(run_dir / "eval_monitor.csv"),
+    )
+    
+    eval_env = train_env
+    
     ppo_kwargs = _build_ppo_kwargs(seed=args.seed)
     latest_model_path = model_dir / "ppo_torcs_latest.zip"
+    best_model_path = model_dir / "best_model.zip"
     resumed_from = None
     if latest_model_path.exists():
         model = PPO.load(str(latest_model_path), env=train_env)
         resumed_from = str(latest_model_path)
-        print(f"[Model] Resumed from {latest_model_path}")
+        print(f"[Model] Resumed from latest model: {latest_model_path}")
     else:
         model = PPO("MlpPolicy", train_env, tensorboard_log=str(tb_dir), **ppo_kwargs)
         print("[Model] No existing checkpoint found, starting fresh")
@@ -385,6 +387,8 @@ def train_and_evaluate(args):
             save_path=str(ckpt_dir),
             name_prefix="ppo_torcs",
             save_vecnormalize=True,
+
+
         ),
         EvalCallback(
             eval_env,
@@ -449,7 +453,6 @@ def train_and_evaluate(args):
         print("[Training Complete]", json.dumps(summary))
     finally:
         train_env.close()
-        eval_env.close()
         if wandb_run is not None:
             wandb_run.finish()
 

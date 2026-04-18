@@ -1,0 +1,6 @@
+{
+  "interrupted": true,
+  "timesteps": 100000,
+  "latest_model_path": "runs\\torcs-ppo\\models\\ppo_torcs_latest.zip",
+  "resumed_from": "runs\\torcs-ppo\\models\\ppo_torcs_latest.zip"
+}
