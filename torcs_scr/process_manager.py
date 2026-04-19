@@ -1,15 +1,16 @@
-#!/usr/bin/python
-
-import argparse
 import subprocess
 import time
 from pathlib import Path
 
 
+def _project_root() -> Path:
+    return Path(__file__).resolve().parents[1]
+
+
 def _log_path(log_file):
     if log_file and str(log_file).strip():
         return Path(log_file).expanduser()
-    return Path(__file__).resolve().parent / "torcs_launcher.log"
+    return _project_root() / "torcs_launcher.log"
 
 
 def _find_udp_port_owner_pids(port):
@@ -98,9 +99,7 @@ def launch_torcs_process(
     if existing_pid is not None:
         kill_torcs_process(existing_pid, log_file=log_file, port=port)
 
-    # Always clean up any process already bound to the target UDP port.
-    # This prevents duplicate TORCS instances when caller PID tracking is stale.
-    stale_pids = _find_udp_port_owner_pids(port)
+    stale_pids = _find_udp_port_owner_pids(port) or set()
     for stale_pid in stale_pids:
         if existing_pid is not None and int(stale_pid) == int(existing_pid):
             continue
@@ -129,14 +128,13 @@ def launch_torcs_process(
         )
         write_launcher_log(log_file, f"launch command dispatched pid={proc_local.pid}")
 
-        # Ensure we do not report success for processes that die immediately.
         time.sleep(0.5)
         return proc_local, proc_local.poll()
 
     proc, exit_code = _spawn_and_validate()
     if exit_code is not None:
         write_launcher_log(log_file, f"launch failed early pid={proc.pid} exit_code={exit_code}")
-        stale_pids = _find_udp_port_owner_pids(port)
+        stale_pids = _find_udp_port_owner_pids(port) or set()
         stale_pids.discard(proc.pid)
         if stale_pids:
             stale_pid = next(iter(stale_pids))
@@ -176,48 +174,3 @@ def launch_torcs_process(
 
     write_launcher_log(log_file, "launcher completed")
     return int(proc.pid)
-
-
-def _parse_args():
-    parser = argparse.ArgumentParser(description="Launch/kill TORCS processes")
-    subparsers = parser.add_subparsers(dest="command", required=True)
-
-    launch_parser = subparsers.add_parser("launch", help="Launch TORCS and print PID")
-    launch_parser.add_argument("--torcs-exe", required=True)
-    launch_parser.add_argument("--port", type=int, default=3001)
-    launch_parser.add_argument("--vision-flag", choices=["vision", "novision"], default="novision")
-    launch_parser.add_argument("--log-file", default="")
-    launch_parser.add_argument("--race-config", default="")
-    launch_parser.add_argument("--autostart-script", default="")
-    launch_parser.add_argument("--existing-pid", type=int, default=None)
-
-    kill_parser = subparsers.add_parser("kill", help="Kill TORCS by PID")
-    kill_parser.add_argument("--pid", type=int, required=True)
-    kill_parser.add_argument("--log-file", default="")
-    kill_parser.add_argument("--port", type=int, default=None)
-
-    return parser.parse_args()
-
-
-def main():
-    args = _parse_args()
-
-    if args.command == "launch":
-        pid = launch_torcs_process(
-            torcs_exe=args.torcs_exe,
-            port=args.port,
-            vision=(args.vision_flag == "vision"),
-            race_config=args.race_config,
-            log_file=args.log_file,
-            autostart_script=args.autostart_script,
-            existing_pid=args.existing_pid,
-        )
-        print(f"TORCS_PID={pid}")
-        return
-
-    if args.command == "kill":
-        kill_torcs_process(args.pid, log_file=args.log_file, port=args.port)
-
-
-if __name__ == "__main__":
-    main()

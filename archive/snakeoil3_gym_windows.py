@@ -5,7 +5,7 @@ import socket
 import sys
 from pathlib import Path
 
-from torcs_process_manager import launch_torcs_process
+from torcs_scr.process_manager import launch_torcs_process
 
 PI = 3.14159265359
 data_size = 2**17
