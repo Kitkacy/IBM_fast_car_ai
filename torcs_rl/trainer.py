@@ -1,6 +1,6 @@
 import json
 
-from stable_baselines3.common.callbacks import CallbackList, CheckpointCallback, EvalCallback
+from stable_baselines3.common.callbacks import BaseCallback, CallbackList, CheckpointCallback, EvalCallback
 from stable_baselines3.common.evaluation import evaluate_policy
 from stable_baselines3.common.monitor import Monitor
 from stable_baselines3.common.vec_env import DummyVecEnv, VecMonitor
@@ -15,6 +15,16 @@ try:
 except Exception:
     wandb = None
     WandbCallback = None
+
+
+class WandbStopCallback(BaseCallback):
+    """Stop training when wandb.run.should_stop() returns True (sweep early-stop)."""
+
+    def _on_step(self) -> bool:
+        if wandb is not None and wandb.run is not None and wandb.run.should_stop():
+            print("[WandbStopCallback] W&B requested early stop.")
+            return False
+        return True
 
 
 def _build_env(
@@ -54,19 +64,27 @@ def train_and_evaluate(args):
     algorithm_hyperparameters = algo_kwargs_builder(seed=args.seed)
 
     wandb_run = None
+    sweep_mode = getattr(args, "sweep_mode", False)
     if args.wandb:
         if wandb is None or WandbCallback is None:
             raise RuntimeError("WandB integration requested but wandb is not installed.")
         wandb_run = wandb.init(
             project=args.wandb_project,
             entity=args.wandb_entity,
-            name=args.run_name,
+            name=None if sweep_mode else args.run_name,
+            job_type="training",
             sync_tensorboard=True,
             monitor_gym=True,
             save_code=True,
             config=build_wandb_run_config(args, algorithm_hyperparameters),
         )
+        # In sweep mode always apply config overrides regardless of --wandb-allow-config.
+        if sweep_mode:
+            args.wandb_allow_config = True
         args, algorithm_hyperparameters = apply_wandb_overrides(args, algorithm_hyperparameters, wandb_run)
+        # Use W&B's generated run name so each sweep trial has a unique directory.
+        if sweep_mode and wandb_run is not None:
+            args.run_name = wandb_run.name
 
     run_dir = args.log_dir / args.run_name
     tb_dir = run_dir / "tensorboard"
@@ -157,6 +175,7 @@ def train_and_evaluate(args):
 
     if args.wandb:
         callbacks.append(WandbCallback(gradient_save_freq=0, model_save_path=str(model_dir), verbose=1))
+        callbacks.append(WandbStopCallback())
 
     try:
         interrupted = False

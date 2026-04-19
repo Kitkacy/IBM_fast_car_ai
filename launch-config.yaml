@@ -1,0 +1,46 @@
+# W&B Launch configuration for TORCS RL training.
+#
+# Register this project as a W&B job (first run, or on change):
+#   wandb job create --name torcs-rl-train --project gym-torcs code .
+#
+# Launch a single run with overrides from the CLI:
+#   wandb launch --job gym-torcs/torcs-rl-train:latest \
+#       -c launch-config.yaml \
+#       --override-config '{"algorithm": "sac", "timesteps": 50000}'
+#
+# Or via the W&B UI:
+#   Project → Jobs → torcs-rl-train → Launch → edit parameters → Launch
+#
+# How config injection works:
+#   main.py --launch forces --wandb and --wandb-allow-config on, so
+#   wandb.config values set by Launch always override CLI defaults.
+
+# Entry point executed by the Launch agent.
+entry_point: "python main.py --launch"
+
+# Default parameter values shown in the Launch UI.
+# All values here correspond directly to main.py CLI arguments.
+overrides:
+  run_config:
+    algo: "ppo"
+    timesteps: 6000
+    run_name: "torcs-launch"
+    seed: 42
+    target_speed: 100.0
+    vision: false
+    checkpoint_freq: 2000
+    eval_episodes: 3
+    runtime_target: "native"
+    train_port: 3001
+    eval_port: 3001
+    wandb_project: "gym-torcs"
+    # Per-algorithm hyperparameters (prefixed with algo name).
+    # Only the matching algo's keys are applied at runtime.
+    ppo_learning_rate: 0.0003
+    ppo_n_steps: 2048
+    ppo_batch_size: 64
+    ppo_gamma: 0.99
+    sac_learning_rate: 0.0003
+    sac_buffer_size: 100000
+    td3_learning_rate: 0.001
+    td3_buffer_size: 100000

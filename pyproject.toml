@@ -13,4 +13,7 @@ dependencies = [
 	"tensorboard>=2.19.0",
 	"wandb>=0.19.11",
 	"rl-zoo3>=2.3.0",
+	"fastapi>=0.100.0",
+	"uvicorn[standard]>=0.20.0",
+	"httpx>=0.24.0",
 ]

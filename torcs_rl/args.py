@@ -71,4 +71,23 @@ def parse_args():
     wandb_group.add_argument("--wandb-entity", type=str, default=None, help="WandB entity/team")
     wandb_group.add_argument("--wandb-allow-config", action="store_true", help="Allow W&B config to override CLI params")
 
+    launch_group = parser.add_argument_group("W&B Launch / Sweep")
+    launch_group.add_argument(
+        "--launch",
+        action="store_true",
+        help="Run as a W&B Launch job (forces --wandb and --wandb-allow-config so the UI can inject config overrides)",
+    )
+    launch_group.add_argument(
+        "--sweep",
+        action="store_true",
+        help="Create a W&B sweep and start a local agent",
+    )
+    launch_group.add_argument(
+        "--sweep-count",
+        type=int,
+        default=None,
+        metavar="N",
+        help="Number of sweep trials to run locally (default: run until stopped)",
+    )
+
     return parser.parse_args()
