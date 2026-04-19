@@ -1,0 +1,16 @@
+[project]
+name = "gym-torcs"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.13.11"
+dependencies = [
+	"gym",
+	"numpy",
+	"matplotlib",
+	"gymnasium>=1.2.3",
+	"stable-baselines3>=2.8.0",
+	"tensorboard>=2.19.0",
+	"wandb>=0.19.11",
+	"rl-zoo3>=2.3.0",
+]
