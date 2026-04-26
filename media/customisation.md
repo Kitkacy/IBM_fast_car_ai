@@ -1,0 +1,1 @@
+To customise the car wrapper, go to '...\torcs\drivers\scr_server\0', and replace car1-ow1.rgb with the .rgb file found in media/textures. Please note that the file must be named car1-ow1.rgb to work. 
