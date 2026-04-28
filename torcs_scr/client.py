@@ -125,12 +125,12 @@ class Client:
                 sockdata = sockdata.decode("utf-8")
             except socket.error:
                 print("Waiting for server on %d............" % self.port)
-                print("Count Down : " + str(n_fail))
-                if n_fail < 0:
-                    print("relaunch torcs")
-                    self._relaunch_torcs()
-                    n_fail = 5
-                n_fail -= 1
+                # print("Count Down : " + str(n_fail))
+                # if n_fail < 0:
+                #     print("relaunch torcs")
+                #     self._relaunch_torcs()
+                #     n_fail = 5
+                # n_fail -= 1
 
             if "***identified***" in sockdata:
                 print("Client connected on %d.............." % self.port)

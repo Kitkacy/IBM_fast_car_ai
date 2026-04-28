@@ -8,7 +8,9 @@ from .config import (
     DEFAULT_EVAL_EPISODES,
     DEFAULT_EVAL_PORT,
     DEFAULT_LAUNCH_LOG_FILE,
+    DEFAULT_TORCS_EXE,
     DEFAULT_LOG_DIR,
+    DEFAULT_RACE_CONFIG,
     DEFAULT_RUN_NAME,
     DEFAULT_RUNTIME_TARGET,
     DEFAULT_SEED,
@@ -56,7 +58,7 @@ def parse_args():
         default=DEFAULT_RUNTIME_TARGET,
         help="Runtime backend target",
     )
-    runtime_group.add_argument("--torcs-exe", type=Path, default=None, help="Override TORCS executable path")
+    runtime_group.add_argument("--torcs-exe", type=Path, default=DEFAULT_TORCS_EXE, help="Override TORCS executable path")
     runtime_group.add_argument("--race-config", type=Path, default=None, help="Train race config XML path")
     runtime_group.add_argument("--eval-race-config", type=Path, default=None, help="Eval race config XML path")
     runtime_group.add_argument("--launch-log", type=str, default=DEFAULT_LAUNCH_LOG_FILE, help="Launcher log filename")
