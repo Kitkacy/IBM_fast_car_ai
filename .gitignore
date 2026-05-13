@@ -16,3 +16,4 @@ pip-selfcheck.json
 vtorcs-RL-color/data/*
 wandb/*
 runs/tensorboard/*
+__pycache__
