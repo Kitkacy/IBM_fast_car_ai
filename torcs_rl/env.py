@@ -237,7 +237,7 @@ class TorcsRLEnv(gym.Env):
             np.asarray(raw_obs["track"], dtype=np.float32) / 200.0,
         ]
         if self.vision:
-            base.append(np.asarray(raw_obs["img"], dtype=np.float32) / 255.0)
+            base.append((np.asarray(raw_obs["img"], dtype=np.float32) / 255.0).flatten())
         return np.concatenate(base, axis=0).astype(np.float32)
 
     def _update_obs_stats(self, obs_tensor):
@@ -269,5 +269,3 @@ class TorcsRLEnv(gym.Env):
         normalized = (obs_tensor - self._obs_mean) / std
         clipped = np.clip(normalized, -self.obs_norm_clip, self.obs_norm_clip)
         return clipped.astype(np.float32)
-
-
