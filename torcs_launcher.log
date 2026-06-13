@@ -14139,3 +14139,244 @@ INFO: No tasks are running which match the specified criteria.
 [2026-04-19 15:11:53] launch command dispatched pid=130736
 [2026-04-19 15:11:59] autostart script finished: C:\Users\szymo\source\repos\torcs\gym_torcs\autostart_windows.ps1
 [2026-04-19 15:11:59] launcher completed
+[2026-04-19 20:21:00] killed TORCS pid=89696 port=3001
+[2026-04-21 04:19:38] begin launcher
+[2026-04-21 04:19:38] TORCS_EXE=C:\Users\szymo\source\repos\torcs\torcs\wtorcs.exe
+[2026-04-21 04:19:38] PORT=3001
+[2026-04-21 04:19:38] VISION_FLAG=novision
+[2026-04-21 04:19:38] RACE_CONFIG=
+[2026-04-21 04:19:39] launch command dispatched pid=9756
+[2026-04-21 04:19:46] autostart script finished: C:\Users\szymo\source\repos\torcs\gym_torcs\autostart_windows.ps1
+[2026-04-21 04:19:46] launcher completed
+[2026-04-21 04:19:46] begin launcher
+[2026-04-21 04:19:46] TORCS_EXE=C:\Users\szymo\source\repos\torcs\torcs\wtorcs.exe
+[2026-04-21 04:19:46] PORT=3001
+[2026-04-21 04:19:46] VISION_FLAG=novision
+[2026-04-21 04:19:46] RACE_CONFIG=
+[2026-04-21 04:19:47] killed TORCS pid=9756 port=3001
+[2026-04-21 04:19:47] launch command dispatched pid=24400
+[2026-04-21 04:20:02] autostart script finished: C:\Users\szymo\source\repos\torcs\gym_torcs\autostart_windows.ps1
+[2026-04-21 04:20:02] launcher completed
+[2026-04-21 04:20:02] begin launcher
+[2026-04-21 04:20:02] TORCS_EXE=C:\Users\szymo\source\repos\torcs\torcs\wtorcs.exe
+[2026-04-21 04:20:02] PORT=3001
+[2026-04-21 04:20:02] VISION_FLAG=novision
+[2026-04-21 04:20:02] RACE_CONFIG=
+[2026-04-21 04:20:02] killed TORCS pid=24400 port=3001
+[2026-04-21 04:20:02] launch command dispatched pid=7132
+[2026-04-21 04:20:09] autostart script finished: C:\Users\szymo\source\repos\torcs\gym_torcs\autostart_windows.ps1
+[2026-04-21 04:20:09] launcher completed
+[2026-04-21 04:20:09] begin launcher
+[2026-04-21 04:20:09] TORCS_EXE=C:\Users\szymo\source\repos\torcs\torcs\wtorcs.exe
+[2026-04-21 04:20:09] PORT=3001
+[2026-04-21 04:20:09] VISION_FLAG=novision
+[2026-04-21 04:20:09] RACE_CONFIG=
+[2026-04-21 04:20:09] killed TORCS pid=7132 port=3001
+[2026-04-21 04:20:10] launch command dispatched pid=15696
+[2026-04-21 04:20:16] autostart script finished: C:\Users\szymo\source\repos\torcs\gym_torcs\autostart_windows.ps1
+[2026-04-21 04:20:16] launcher completed
+[2026-04-21 04:20:16] begin launcher
+[2026-04-21 04:20:16] TORCS_EXE=C:\Users\szymo\source\repos\torcs\torcs\wtorcs.exe
+[2026-04-21 04:20:16] PORT=3001
+[2026-04-21 04:20:16] VISION_FLAG=novision
+[2026-04-21 04:20:16] RACE_CONFIG=
+[2026-04-21 04:20:16] killed TORCS pid=15696 port=3001
+[2026-04-21 04:20:17] launch command dispatched pid=27204
+[2026-04-21 04:20:24] autostart script finished: C:\Users\szymo\source\repos\torcs\gym_torcs\autostart_windows.ps1
+[2026-04-21 04:20:24] launcher completed
+[2026-04-21 04:20:24] begin launcher
+[2026-04-21 04:20:24] TORCS_EXE=C:\Users\szymo\source\repos\torcs\torcs\wtorcs.exe
+[2026-04-21 04:20:24] PORT=3001
+[2026-04-21 04:20:24] VISION_FLAG=novision
+[2026-04-21 04:20:24] RACE_CONFIG=
+[2026-04-21 04:20:24] killed TORCS pid=27204 port=3001
+[2026-04-21 04:20:25] launch command dispatched pid=17084
+[2026-04-21 04:20:34] autostart script finished: C:\Users\szymo\source\repos\torcs\gym_torcs\autostart_windows.ps1
+[2026-04-21 04:20:34] launcher completed
+[2026-04-21 04:20:34] begin launcher
+[2026-04-21 04:20:34] TORCS_EXE=C:\Users\szymo\source\repos\torcs\torcs\wtorcs.exe
+[2026-04-21 04:20:34] PORT=3001
+[2026-04-21 04:20:34] VISION_FLAG=novision
+[2026-04-21 04:20:34] RACE_CONFIG=
+[2026-04-21 04:20:35] killed TORCS pid=17084 port=3001
+[2026-04-21 04:20:36] launch command dispatched pid=28284
+[2026-04-21 04:21:34] begin launcher
+[2026-04-21 04:21:34] TORCS_EXE=C:\Users\szymo\source\repos\torcs\torcs\wtorcs.exe
+[2026-04-21 04:21:34] PORT=3001
+[2026-04-21 04:21:34] VISION_FLAG=novision
+[2026-04-21 04:21:34] RACE_CONFIG=
+[2026-04-21 04:21:34] launch command dispatched pid=4316
+[2026-04-21 04:21:41] autostart script finished: C:\Users\szymo\source\repos\torcs\gym_torcs\autostart_windows.ps1
+[2026-04-21 04:21:41] launcher completed
+[2026-04-21 04:21:41] begin launcher
+[2026-04-21 04:21:41] TORCS_EXE=C:\Users\szymo\source\repos\torcs\torcs\wtorcs.exe
+[2026-04-21 04:21:41] PORT=3001
+[2026-04-21 04:21:41] VISION_FLAG=novision
+[2026-04-21 04:21:41] RACE_CONFIG=
+[2026-04-21 04:21:41] killed TORCS pid=4316 port=3001
+[2026-04-21 04:21:42] launch command dispatched pid=13824
+[2026-04-21 04:21:49] autostart script finished: C:\Users\szymo\source\repos\torcs\gym_torcs\autostart_windows.ps1
+[2026-04-21 04:21:49] launcher completed
+[2026-04-21 04:21:49] begin launcher
+[2026-04-21 04:21:49] TORCS_EXE=C:\Users\szymo\source\repos\torcs\torcs\wtorcs.exe
+[2026-04-21 04:21:49] PORT=3001
+[2026-04-21 04:21:49] VISION_FLAG=novision
+[2026-04-21 04:21:49] RACE_CONFIG=
+[2026-04-21 04:21:49] killed TORCS pid=13824 port=3001
+[2026-04-21 04:21:50] launch command dispatched pid=25004
+[2026-04-21 04:21:56] autostart script finished: C:\Users\szymo\source\repos\torcs\gym_torcs\autostart_windows.ps1
+[2026-04-21 04:21:56] launcher completed
+[2026-04-21 04:21:56] begin launcher
+[2026-04-21 04:21:56] TORCS_EXE=C:\Users\szymo\source\repos\torcs\torcs\wtorcs.exe
+[2026-04-21 04:21:57] PORT=3001
+[2026-04-21 04:21:57] VISION_FLAG=novision
+[2026-04-21 04:21:57] RACE_CONFIG=
+[2026-04-21 04:21:57] killed TORCS pid=25004 port=3001
+[2026-04-21 04:21:58] launch command dispatched pid=18680
+[2026-04-21 04:22:04] autostart script finished: C:\Users\szymo\source\repos\torcs\gym_torcs\autostart_windows.ps1
+[2026-04-21 04:22:04] launcher completed
+[2026-04-21 04:22:04] begin launcher
+[2026-04-21 04:22:04] TORCS_EXE=C:\Users\szymo\source\repos\torcs\torcs\wtorcs.exe
+[2026-04-21 04:22:04] PORT=3001
+[2026-04-21 04:22:04] VISION_FLAG=novision
+[2026-04-21 04:22:04] RACE_CONFIG=
+[2026-04-21 04:22:04] killed TORCS pid=18680 port=3001
+[2026-04-21 04:22:05] launch command dispatched pid=8072
+[2026-04-21 04:22:10] autostart script finished: C:\Users\szymo\source\repos\torcs\gym_torcs\autostart_windows.ps1
+[2026-04-21 04:22:10] launcher completed
+[2026-04-21 04:22:10] begin launcher
+[2026-04-21 04:22:10] TORCS_EXE=C:\Users\szymo\source\repos\torcs\torcs\wtorcs.exe
+[2026-04-21 04:22:10] PORT=3001
+[2026-04-21 04:22:10] VISION_FLAG=novision
+[2026-04-21 04:22:10] RACE_CONFIG=
+[2026-04-21 04:22:10] killed TORCS pid=8072 port=3001
+[2026-04-21 04:22:11] launch command dispatched pid=15964
+[2026-04-21 04:24:33] begin launcher
+[2026-04-21 04:24:33] TORCS_EXE=C:\Users\szymo\source\repos\torcs\torcs\wtorcs.exe
+[2026-04-21 04:24:33] PORT=3001
+[2026-04-21 04:24:33] VISION_FLAG=novision
+[2026-04-21 04:24:33] RACE_CONFIG=
+[2026-04-21 04:24:34] launch command dispatched pid=17584
+[2026-04-21 04:24:40] autostart script finished: C:\Users\szymo\source\repos\torcs\gym_torcs\autostart_windows.ps1
+[2026-04-21 04:24:40] launcher completed
+[2026-04-21 04:24:51] begin launcher
+[2026-04-21 04:24:51] TORCS_EXE=C:\Users\szymo\source\repos\torcs\torcs\wtorcs.exe
+[2026-04-21 04:24:51] PORT=3001
+[2026-04-21 04:24:51] VISION_FLAG=novision
+[2026-04-21 04:24:51] RACE_CONFIG=
+[2026-04-21 04:24:51] pre-launch cleanup: killing stale UDP owner pid=17584 on port=3001
+[2026-04-21 04:24:51] killed TORCS pid=17584 port=3001
+[2026-04-21 04:24:52] launch command dispatched pid=3520
+[2026-04-21 04:24:58] autostart script finished: C:\Users\szymo\source\repos\torcs\gym_torcs\autostart_windows.ps1
+[2026-04-21 04:24:58] launcher completed
+[2026-04-21 04:25:19] begin launcher
+[2026-04-21 04:25:19] TORCS_EXE=C:\Users\szymo\source\repos\torcs\torcs\wtorcs.exe
+[2026-04-21 04:25:19] PORT=3001
+[2026-04-21 04:25:19] VISION_FLAG=novision
+[2026-04-21 04:25:19] RACE_CONFIG=
+[2026-04-21 04:25:19] pre-launch cleanup: killing stale UDP owner pid=3520 on port=3001
+[2026-04-21 04:25:19] killed TORCS pid=3520 port=3001
+[2026-04-21 04:25:20] launch command dispatched pid=9168
+[2026-04-21 04:25:26] autostart script finished: C:\Users\szymo\source\repos\torcs\gym_torcs\autostart_windows.ps1
+[2026-04-21 04:25:26] launcher completed
+[2026-04-21 04:25:52] begin launcher
+[2026-04-21 04:25:52] TORCS_EXE=C:\Users\szymo\source\repos\torcs\torcs\wtorcs.exe
+[2026-04-21 04:25:52] PORT=3001
+[2026-04-21 04:25:52] VISION_FLAG=novision
+[2026-04-21 04:25:52] RACE_CONFIG=
+[2026-04-21 04:25:52] pre-launch cleanup: killing stale UDP owner pid=9168 on port=3001
+[2026-04-21 04:25:53] killed TORCS pid=9168 port=3001
+[2026-04-21 04:25:53] launch command dispatched pid=20024
+[2026-04-21 04:26:00] autostart script finished: C:\Users\szymo\source\repos\torcs\gym_torcs\autostart_windows.ps1
+[2026-04-21 04:26:00] launcher completed
+[2026-04-21 04:26:12] begin launcher
+[2026-04-21 04:26:12] TORCS_EXE=C:\Users\szymo\source\repos\torcs\torcs\wtorcs.exe
+[2026-04-21 04:26:12] PORT=3001
+[2026-04-21 04:26:12] VISION_FLAG=novision
+[2026-04-21 04:26:12] RACE_CONFIG=
+[2026-04-21 04:26:13] launch command dispatched pid=24328
+[2026-04-21 04:26:25] autostart script finished: C:\Users\szymo\source\repos\torcs\gym_torcs\autostart_windows.ps1
+[2026-04-21 04:26:25] launcher completed
+[2026-04-21 04:27:46] killed TORCS pid=24328 port=3001
+[2026-04-21 04:27:59] begin launcher
+[2026-04-21 04:27:59] TORCS_EXE=C:\Users\szymo\source\repos\torcs\torcs\wtorcs.exe
+[2026-04-21 04:27:59] PORT=3001
+[2026-04-21 04:27:59] VISION_FLAG=novision
+[2026-04-21 04:27:59] RACE_CONFIG=
+[2026-04-21 04:28:00] launch command dispatched pid=28656
+[2026-04-21 04:28:07] autostart script finished: C:\Users\szymo\source\repos\torcs\gym_torcs\autostart_windows.ps1
+[2026-04-21 04:28:07] launcher completed
+[2026-04-21 04:28:16] begin launcher
+[2026-04-21 04:28:16] TORCS_EXE=C:\Users\szymo\source\repos\torcs\torcs\wtorcs.exe
+[2026-04-21 04:28:16] PORT=3001
+[2026-04-21 04:28:16] VISION_FLAG=novision
+[2026-04-21 04:28:16] RACE_CONFIG=
+[2026-04-21 04:28:16] pre-launch cleanup: killing stale UDP owner pid=28656 on port=3001
+[2026-04-21 04:28:16] killed TORCS pid=28656 port=3001
+[2026-04-21 04:28:17] launch command dispatched pid=27008
+[2026-04-21 04:28:23] autostart script finished: C:\Users\szymo\source\repos\torcs\gym_torcs\autostart_windows.ps1
+[2026-04-21 04:28:23] launcher completed
+[2026-04-21 04:28:54] begin launcher
+[2026-04-21 04:28:54] TORCS_EXE=C:\Users\szymo\source\repos\torcs\torcs\wtorcs.exe
+[2026-04-21 04:28:54] PORT=3001
+[2026-04-21 04:28:54] VISION_FLAG=novision
+[2026-04-21 04:28:54] RACE_CONFIG=
+[2026-04-21 04:28:55] launch command dispatched pid=10980
+[2026-04-21 04:29:02] autostart script finished: C:\Users\szymo\source\repos\torcs\gym_torcs\autostart_windows.ps1
+[2026-04-21 04:29:02] launcher completed
+[2026-04-21 04:29:20] begin launcher
+[2026-04-21 04:29:20] TORCS_EXE=C:\Users\szymo\source\repos\torcs\torcs\wtorcs.exe
+[2026-04-21 04:29:20] PORT=3001
+[2026-04-21 04:29:20] VISION_FLAG=novision
+[2026-04-21 04:29:20] RACE_CONFIG=
+[2026-04-21 04:29:20] launch command dispatched pid=3564
+[2026-04-21 04:29:29] autostart script finished: C:\Users\szymo\source\repos\torcs\gym_torcs\autostart_windows.ps1
+[2026-04-21 04:29:29] launcher completed
+[2026-04-21 04:30:29] killed TORCS pid=3564 port=3001
+[2026-04-21 11:44:55] begin launcher
+[2026-04-21 11:44:55] TORCS_EXE=C:\Users\szymo\source\repos\torcs\torcs\wtorcs.exe
+[2026-04-21 11:44:55] PORT=3001
+[2026-04-21 11:44:55] VISION_FLAG=novision
+[2026-04-21 11:44:55] RACE_CONFIG=
+[2026-04-21 11:44:57] launch command dispatched pid=9756
+[2026-04-21 11:45:04] autostart script finished: C:\Users\szymo\source\repos\torcs\gym_torcs\autostart_windows.ps1
+[2026-04-21 11:45:04] launcher completed
+[2026-04-21 11:45:16] begin launcher
+[2026-04-21 11:45:16] TORCS_EXE=C:\Users\szymo\source\repos\torcs\torcs\wtorcs.exe
+[2026-04-21 11:45:16] PORT=3001
+[2026-04-21 11:45:16] VISION_FLAG=novision
+[2026-04-21 11:45:16] RACE_CONFIG=
+[2026-04-21 11:45:16] pre-launch cleanup: killing stale UDP owner pid=9756 on port=3001
+[2026-04-21 11:45:16] killed TORCS pid=9756 port=3001
+[2026-04-21 11:45:17] launch command dispatched pid=24648
+[2026-04-21 11:45:52] autostart script finished: C:\Users\szymo\source\repos\torcs\gym_torcs\autostart_windows.ps1
+[2026-04-21 11:45:52] launcher completed
+[2026-04-21 11:46:33] begin launcher
+[2026-04-21 11:46:33] TORCS_EXE=C:\Users\szymo\source\repos\torcs\torcs\wtorcs.exe
+[2026-04-21 11:46:33] PORT=3001
+[2026-04-21 11:46:33] VISION_FLAG=novision
+[2026-04-21 11:46:33] RACE_CONFIG=
+[2026-04-21 11:46:34] pre-launch cleanup: killing stale UDP owner pid=24648 on port=3001
+[2026-04-21 11:46:34] killed TORCS pid=24648 port=3001
+[2026-04-21 11:46:35] launch command dispatched pid=12156
+[2026-04-21 11:47:10] autostart script finished: C:\Users\szymo\source\repos\torcs\gym_torcs\autostart_windows.ps1
+[2026-04-21 11:47:10] launcher completed
+[2026-04-21 12:03:26] begin launcher
+[2026-04-21 12:03:26] TORCS_EXE=C:\Users\szymo\source\repos\torcs\torcs\wtorcs.exe
+[2026-04-21 12:03:26] PORT=3001
+[2026-04-21 12:03:26] VISION_FLAG=novision
+[2026-04-21 12:03:26] RACE_CONFIG=
+[2026-04-21 12:03:26] launch command dispatched pid=22784
+[2026-04-21 12:03:41] autostart script finished: C:\Users\szymo\source\repos\torcs\gym_torcs\autostart_windows.ps1
+[2026-04-21 12:03:41] launcher completed
+[2026-04-21 12:05:24] begin launcher
+[2026-04-21 12:05:24] TORCS_EXE=C:\Users\szymo\source\repos\torcs\torcs\wtorcs.exe
+[2026-04-21 12:05:24] PORT=3001
+[2026-04-21 12:05:24] VISION_FLAG=novision
+[2026-04-21 12:05:24] RACE_CONFIG=
+[2026-04-21 12:05:24] pre-launch cleanup: killing stale UDP owner pid=12156 on port=3001
+[2026-04-21 12:05:25] killed TORCS pid=12156 port=3001
+[2026-04-21 12:05:25] launch command dispatched pid=17780
+[2026-04-21 12:05:56] autostart script finished: C:\Users\szymo\source\repos\torcs\gym_torcs\autostart_windows.ps1
+[2026-04-21 12:05:56] launcher completed
+[2026-04-21 12:11:35] killed TORCS pid=22784 port=3001

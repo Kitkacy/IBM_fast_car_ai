@@ -18,6 +18,8 @@ DEFAULT_CHECKPOINT_FREQ = 2_000
 DEFAULT_WANDB = False
 DEFAULT_WANDB_PROJECT = "gym-torcs"
 DEFAULT_LAUNCH_LOG_FILE = "torcs_launcher.log"
+DEFAULT_TORCS_EXE = Path("../../torcs/torcs/wtorcs.exe")
+DEFAULT_RACE_CONFIG = Path("../../torcs/config/raceman/practice.xml")
 
 # Explicit TORCS port defaults to keep train/eval wiring easy to read.
 DEFAULT_TRAIN_PORT = 3001
