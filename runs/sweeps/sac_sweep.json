@@ -1,7 +1,7 @@
 {
   "method": "bayes",
   "metric": {
-    "name": "eval/progress_score",
+    "name": "eval/mean_distance_raced",
     "goal": "maximize"
   },
   "parameters": {

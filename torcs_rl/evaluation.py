@@ -171,19 +171,24 @@ class LapLoggerCallback(BaseCallback):
         self.lap_events_path = Path(lap_events_path) if lap_events_path else None
 
     def _on_step(self):
+        # Log per-step train metrics explicitly to wandb (WandbOutputFormat handles logger-based metrics,
+        # but these per-step env metrics are not written to the logger at every step)
+        if wandb is not None and getattr(wandb, "run", None) is not None:
+            for info in self.locals.get("infos", []):
+                step_payload = {}
+                for key in ("progress_distance", "distance_raced", "mean_speed", "max_speed",
+                            "mean_throttle", "mean_brake", "laps_completed"):
+                    val = safe_float(info.get(key))
+                    if val is not None:
+                        step_payload[f"{self.prefix}/{key}"] = val
+                if step_payload:
+                    wandb.log(step_payload, step=int(self.num_timesteps))
+
         for info in self.locals.get("infos", []):
             completed_lap_time = safe_float(info.get("completed_lap_time"))
             if info.get("lap_completed") and completed_lap_time is not None:
                 self.logger.record(f"{self.prefix}/lap_time", completed_lap_time)
                 self.logger.record(f"{self.prefix}/laps_completed", float(info.get("laps_completed", 0)))
-                if wandb is not None and getattr(wandb, "run", None) is not None:
-                    wandb.log(
-                        {
-                            f"{self.prefix}/lap_time": completed_lap_time,
-                            f"{self.prefix}/laps_completed": float(info.get("laps_completed", 0)),
-                        },
-                        step=int(self.num_timesteps),
-                    )
                 if self.lap_events_path is not None:
                     append_csv_row(
                         self.lap_events_path,
@@ -214,10 +219,6 @@ class LapLoggerCallback(BaseCallback):
 
             self.logger.record(f"{self.prefix}/episode_reward", float(info["episode"]["r"]))
             self.logger.record(f"{self.prefix}/episode_length", float(info["episode"]["l"]))
-            wandb_payload = {
-                f"{self.prefix}/episode_reward": float(info["episode"]["r"]),
-                f"{self.prefix}/episode_length": float(info["episode"]["l"]),
-            }
             for key in (
                 "laps_completed",
                 "last_lap_time",
@@ -231,9 +232,6 @@ class LapLoggerCallback(BaseCallback):
                 metric = safe_float(info["episode"].get(key))
                 if metric is not None:
                     self.logger.record(f"{self.prefix}/{key}", metric)
-                    wandb_payload[f"{self.prefix}/{key}"] = metric
-            if wandb is not None and getattr(wandb, "run", None) is not None:
-                wandb.log(wandb_payload, step=int(self.num_timesteps))
         return True
 
 
@@ -242,6 +240,7 @@ class TorcsEvalCallback(EvalCallback):
         super().__init__(*args, **kwargs)
         self.latest_lap_stats = {}
         self.best_lap_median = None
+        self.best_mean_distance = -float("inf")
         self.lap_events_path = Path(lap_events_path) if lap_events_path else None
         self.eval_summary_path = None
         if self.log_path is not None:
@@ -347,40 +346,17 @@ class TorcsEvalCallback(EvalCallback):
         if lap_stats["eval_lap_time_iqr"] is not None:
             self.logger.record("eval/lap_time_iqr", lap_stats["eval_lap_time_iqr"])
 
-        if wandb is not None and getattr(wandb, "run", None) is not None:
-            wandb_payload = {
-                "eval/mean_reward": mean_reward,
-                "eval/mean_ep_length": mean_ep_length,
-                "eval/completed_laps": float(lap_stats["eval_completed_laps"]),
-                "eval/lap_completion_rate": float(lap_stats["eval_lap_completion_rate"]),
-                "eval/timed_laps": float(lap_stats["eval_timed_laps"]),
-                "eval/timed_lap_completion_rate": float(lap_stats["eval_timed_lap_completion_rate"]),
-                "eval/off_track_rate": float(lap_stats["eval_off_track_rate"]),
-                "eval/mean_progress": float(lap_stats["eval_mean_progress"]),
-                "eval/progress_score": float(lap_stats["eval_progress_score"]),
-                "eval/mean_distance_raced": float(lap_stats["eval_mean_distance_raced"]),
-                "eval/mean_throttle": float(lap_stats["eval_mean_throttle"]),
-                "eval/mean_brake": float(lap_stats["eval_mean_brake"]),
-                "eval/mean_speed": float(lap_stats["eval_mean_speed"]),
-                "eval/max_speed": float(lap_stats["eval_max_speed"]),
-            }
-            if lap_stats["eval_median_lap_time"] is not None:
-                wandb_payload["eval/median_lap_time"] = lap_stats["eval_median_lap_time"]
-            if lap_stats["eval_best_lap_time"] is not None:
-                wandb_payload["eval/best_lap_time"] = lap_stats["eval_best_lap_time"]
-            if lap_stats["eval_lap_time_iqr"] is not None:
-                wandb_payload["eval/lap_time_iqr"] = lap_stats["eval_lap_time_iqr"]
-            wandb.log(wandb_payload, step=int(self.num_timesteps))
-
         self.logger.record("time/total_timesteps", self.num_timesteps, exclude="tensorboard")
         self.logger.dump(self.num_timesteps)
 
-        if mean_reward > self.best_mean_reward:
+        mean_distance = lap_stats["eval_mean_distance_raced"]
+
+        if mean_distance > self.best_mean_distance:
             if self.verbose >= 1:
-                print("New best mean reward")
+                print(f"New best mean distance: {mean_distance:.2f}")
             if self.best_model_save_path is not None:
-                self.model.save(os.path.join(self.best_model_save_path, "best_reward_model"))
-            self.best_mean_reward = mean_reward
+                self.model.save(os.path.join(self.best_model_save_path, "best_distance_model"))
+            self.best_mean_distance = mean_distance
             if self.callback_on_new_best is not None:
                 continue_training = self.callback_on_new_best.on_step()
 

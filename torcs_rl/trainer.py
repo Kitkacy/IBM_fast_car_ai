@@ -1,12 +1,14 @@
 from __future__ import annotations
 
 import json
+import numbers
+from datetime import datetime
 from pathlib import Path
 from typing import Any
 
 import numpy as np
 from stable_baselines3.common.callbacks import CallbackList, CheckpointCallback
-from stable_baselines3.common.logger import configure
+from stable_baselines3.common.logger import HumanOutputFormat, KVWriter
 from stable_baselines3.common.vec_env import DummyVecEnv, VecMonitor
 
 from torcs_scr import Client
@@ -21,6 +23,44 @@ try:
     import wandb
 except Exception:
     wandb = None
+
+
+class WandbOutputFormat(KVWriter):
+    """SB3 logger output that writes scalar metrics directly to wandb."""
+
+    def write(self, key_values: dict, key_excluded: dict, step: int = 0) -> None:
+        if wandb is None or getattr(wandb, "run", None) is None:
+            return
+        payload = {}
+        for key, value in key_values.items():
+            excluded = key_excluded.get(key, "")
+            if "wandb" in excluded:
+                continue
+            scalar = _coerce_wandb_scalar(value)
+            if scalar is not None:
+                payload[key] = scalar
+        if payload:
+            wandb.log(payload, step=step)
+
+    def close(self) -> None:
+        """SB3 expects output formats to expose close(), but wandb owns its run lifecycle."""
+        return
+
+
+def _coerce_wandb_scalar(value: Any) -> int | float | bool | None:
+    if isinstance(value, np.ndarray):
+        if value.shape == () or value.size == 1:
+            return _coerce_wandb_scalar(value.item())
+        return None
+    if isinstance(value, np.generic):
+        return _coerce_wandb_scalar(value.item())
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, numbers.Integral):
+        return int(value)
+    if isinstance(value, numbers.Real):
+        return float(value)
+    return None
 
 
 def _jsonable(value: Any):
@@ -57,6 +97,34 @@ def _log_wandb_artifact(wandb_run, run_name: str, paths: tuple[Path, ...]) -> No
         print(f"[W&B] Artifact upload warning: {exc}")
 
 
+def _wandb_run_is_disabled(wandb_run) -> bool:
+    return getattr(getattr(wandb_run, "settings", None), "mode", None) == "disabled"
+
+
+def _init_wandb_run(config: AppConfig, *, run_config: dict[str, Any] | None = None):
+    init_kwargs = {
+        "project": config.wandb_project,
+        "entity": config.wandb_entity,
+        "name": config.run_name,
+        "job_type": "training",
+        "mode": "online",
+        "monitor_gym": True,
+        "save_code": True,
+    }
+    if run_config is not None:
+        init_kwargs["config"] = run_config
+    return wandb.init(**init_kwargs)
+
+
+def _finish_wandb_run(wandb_run, *, exit_code: int) -> None:
+    if wandb_run is None:
+        return
+    try:
+        wandb_run.finish(exit_code=exit_code)
+    except Exception as exc:
+        print(f"[W&B] Finish warning: {exc}")
+
+
 def _env_kwargs(config: AppConfig, client: Client, *, max_episode_steps: int) -> dict[str, Any]:
     return {
         "client": client,
@@ -81,7 +149,27 @@ def _vec_env(monitor_path: Path, config: AppConfig, client: Client, *, max_episo
 
 
 def _set_tensorboard_logger(model, tb_dir: Path) -> None:
-    model.set_logger(configure(str(tb_dir), ["stdout", "tensorboard"]))
+    from stable_baselines3.common.logger import Logger, TensorBoardOutputFormat
+    import sys
+
+    formats = [
+        HumanOutputFormat(sys.stdout),
+        TensorBoardOutputFormat(str(tb_dir)),
+    ]
+    if wandb is not None and getattr(wandb, "run", None) is not None:
+        formats.append(WandbOutputFormat())
+    model.set_logger(Logger(str(tb_dir), formats))
+
+
+def _create_tensorboard_session_dir(tb_root: Path, run_name: str) -> Path:
+    session_stem = f"{run_name}-{datetime.now():%Y%m%d-%H%M%S}"
+    session_dir = tb_root / session_stem
+    suffix = 2
+    while session_dir.exists():
+        session_dir = tb_root / f"{session_stem}-{suffix}"
+        suffix += 1
+    session_dir.mkdir(parents=True, exist_ok=False)
+    return session_dir
 
 
 def _summary(config: AppConfig, algo: str, model, lap_stats: dict[str, Any], **extra) -> dict[str, Any]:
@@ -208,42 +296,31 @@ def train_and_evaluate(config: AppConfig) -> None:
 
     client = _create_client(config)
     run_dir = config.log_dir / config.run_name
-    tb_dir = run_dir / "tensorboard"
+    tb_root_dir = run_dir / "tensorboard"
     ckpt_dir = run_dir / "checkpoints"
     eval_dir = run_dir / "eval"
     model_dir = run_dir / "models"
     lap_events_path = run_dir / "lap_events.csv"
-    for directory in (run_dir, tb_dir, ckpt_dir, eval_dir, model_dir):
+    for directory in (run_dir, tb_root_dir, ckpt_dir, eval_dir, model_dir):
         directory.mkdir(parents=True, exist_ok=True)
+    tb_dir = _create_tensorboard_session_dir(tb_root_dir, config.run_name)
 
     model_cls, algorithm_hyperparameters = build_algorithm(config)
     wandb_run = None
+    wandb_run_started_here = False
     wandb_enabled = config.wandb or config.mode == "launch" or config.mode == "sweep"
     if wandb_enabled:
         if wandb is None:
             raise RuntimeError("W&B integration requested but wandb is not installed.")
         if config.mode == "sweep":
             wandb_run = getattr(wandb, "run", None)
-            if wandb_run is None:
-                wandb_run = wandb.init(
-                    project=config.wandb_project,
-                    entity=config.wandb_entity,
-                    name=config.run_name,
-                    job_type="training",
-                    sync_tensorboard=True,
-                    monitor_gym=True,
-                    save_code=True,
-                )
+            if wandb_run is None or _wandb_run_is_disabled(wandb_run):
+                wandb_run = _init_wandb_run(config)
+                wandb_run_started_here = True
         else:
-            wandb_run = wandb.init(
-                project=config.wandb_project,
-                entity=config.wandb_entity,
-                name=config.run_name,
-                job_type="training",
-                sync_tensorboard=True,
-                monitor_gym=True,
-                save_code=True,
-                config={
+            wandb_run = _init_wandb_run(
+                config,
+                run_config={
                     "mode": config.mode,
                     "algo": config.algo,
                     "timesteps": config.timesteps,
@@ -252,10 +329,12 @@ def train_and_evaluate(config: AppConfig) -> None:
                     "checkpoint_freq": config.checkpoint_freq,
                     "run_name": config.run_name,
                     "gui": config.gui,
+                    "wandb_save_artifacts": config.wandb_save_artifacts,
                     "reward_weights": config.reward_weights,
                     "algorithm_hyperparameters": _jsonable(algorithm_hyperparameters),
                 },
             )
+            wandb_run_started_here = True
 
     env = _vec_env(
         run_dir / "train_monitor.csv",
@@ -274,7 +353,7 @@ def train_and_evaluate(config: AppConfig) -> None:
             _validate_saved_action_space(model_cls, latest_model_path)
         except ValueError:
             print(f"[Model] Not resuming incompatible checkpoint: {latest_model_path}")
-            model = model_cls("MlpPolicy", env, tensorboard_log=str(tb_dir), **algorithm_hyperparameters)
+            model = model_cls("MlpPolicy", env, tensorboard_log=str(tb_root_dir), **algorithm_hyperparameters)
             _set_tensorboard_logger(model, tb_dir)
         else:
             model = model_cls.load(str(latest_model_path), env=env)
@@ -282,7 +361,7 @@ def train_and_evaluate(config: AppConfig) -> None:
             resumed_from = str(latest_model_path)
             print(f"[Model] Resumed from latest model: {latest_model_path}")
     else:
-        model = model_cls("MlpPolicy", env, tensorboard_log=str(tb_dir), **algorithm_hyperparameters)
+        model = model_cls("MlpPolicy", env, tensorboard_log=str(tb_root_dir), **algorithm_hyperparameters)
         _set_tensorboard_logger(model, tb_dir)
 
     callbacks = [
@@ -309,6 +388,7 @@ def train_and_evaluate(config: AppConfig) -> None:
     )
 
     summary_path = run_dir / "summary.json"
+    wandb_exit_code = 1
     try:
         interrupted = False
         try:
@@ -316,7 +396,7 @@ def train_and_evaluate(config: AppConfig) -> None:
                 total_timesteps=config.timesteps,
                 callback=CallbackList(callbacks),
                 progress_bar=True,
-                tb_log_name="",
+                tb_log_name=tb_dir.name,
             )
         except KeyboardInterrupt:
             interrupted = True
@@ -338,6 +418,7 @@ def train_and_evaluate(config: AppConfig) -> None:
             if wandb_run is not None:
                 wandb_run.summary.update(summary)
             print("[Training Interrupted]", json.dumps(summary))
+            wandb_exit_code = 0
             return
 
         model.save(str(final_model_base))
@@ -369,16 +450,20 @@ def train_and_evaluate(config: AppConfig) -> None:
         write_json(summary_path, summary)
         if wandb_run is not None:
             wandb_run.summary.update(summary)
-            _log_wandb_artifact(
-                wandb_run,
-                config.run_name,
-                (
-                    summary_path,
-                    eval_dir / "evaluation_summary.json",
-                    lap_events_path,
-                    final_model_path,
-                ),
-            )
+            if config.wandb_save_artifacts:
+                _log_wandb_artifact(
+                    wandb_run,
+                    config.run_name,
+                    (
+                        summary_path,
+                        eval_dir / "evaluation_summary.json",
+                        lap_events_path,
+                        final_model_path,
+                    ),
+                )
         print("[Training Complete]", json.dumps(summary))
+        wandb_exit_code = 0
     finally:
         client.close()
+        if wandb_run_started_here:
+            _finish_wandb_run(wandb_run, exit_code=wandb_exit_code)

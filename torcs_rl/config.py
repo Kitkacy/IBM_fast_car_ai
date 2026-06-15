@@ -44,6 +44,7 @@ class AppConfig:
     wandb: bool
     wandb_project: str
     wandb_entity: str | None
+    wandb_save_artifacts: bool
     evaluate_model: Path | None
     eval_freq: int
     eval_max_episode_steps: int
@@ -248,6 +249,7 @@ def load_config(path: Path | None = None) -> AppConfig:
         wandb=_require_bool(wandb, "enabled"),
         wandb_project=_require_str(wandb, "project"),
         wandb_entity=_optional_str(wandb, "entity"),
+        wandb_save_artifacts=_require_bool(wandb, "save_artifacts"),
         evaluate_model=evaluate_model,
         eval_episodes=_require_int(evaluation, "eval_episodes"),
         eval_freq=_require_int(evaluation, "eval_freq"),

@@ -9,14 +9,14 @@ runtime:
 
 training:
   algorithm: sac
-  timesteps: 12000
+  timesteps: 2400
   seed: 42
-  checkpoint_freq: 4000
+  checkpoint_freq: 800
   log_dir: "runs"
   run_name: "torcs-sac"
 
 environment:
-  max_episode_steps: 2000
+  max_episode_steps: 800
   low_progress_steps: 200
   low_progress_threshold: 5.0
 
@@ -31,18 +31,19 @@ wandb:
   enabled: true
   project: "gym-torcs"
   entity: null
+  save_artifacts: false
 
 evaluation:
   model_path: null
   eval_episodes: 5
-  eval_freq: 4000
-  max_episode_steps: 4000
+  eval_freq: 800
+  max_episode_steps: 800
 
 sweep:
-  count: 16
+  count: 32
   method: bayes
   metric:
-    name: "eval/progress_score"
+    name: "eval/mean_distance_raced"
     goal: maximize
   parameters:
     track_weight:

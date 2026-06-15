@@ -46,14 +46,14 @@ def launch_sweep(config: AppConfig):
 
     def run_trial():
         run = getattr(wandb, "run", None)
-        created_run = run is None
+        created_run = run is None or getattr(getattr(run, "settings", None), "mode", None) == "disabled"
         if created_run:
             run = wandb.init(
                 project=config.wandb_project,
                 entity=config.wandb_entity,
                 name=config.run_name,
                 job_type="training",
-                sync_tensorboard=True,
+                mode="online",
                 monitor_gym=True,
                 save_code=True,
             )
