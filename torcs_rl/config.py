@@ -9,7 +9,6 @@ from typing import Any
 import yaml
 
 MODES = ("train", "evaluate", "sweep", "launch")
-RUNTIME_TARGETS = ("native", "linux", "docker")
 ALGORITHM_NAMES = ("ppo", "sac", "td3")
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
@@ -23,7 +22,6 @@ class ConfigError(ValueError):
 @dataclass(frozen=True)
 class AppConfig:
     mode: str
-    runtime_target: str
     torcs_exe: Path
     race_config: Path
     gui: bool
@@ -229,7 +227,6 @@ def load_config(path: Path | None = None) -> AppConfig:
 
     return AppConfig(
         mode=mode,
-        runtime_target=_require_choice(runtime, "target", RUNTIME_TARGETS),
         torcs_exe=_require_path(runtime, "torcs_exe", base_dir),
         race_config=_require_path(runtime, "race_config", base_dir),
         gui=_require_bool(runtime, "gui"),

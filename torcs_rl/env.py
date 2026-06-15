@@ -1,6 +1,3 @@
-import time
-from pathlib import Path
-
 import gymnasium as gym
 import numpy as np
 from gymnasium import spaces
@@ -24,11 +21,7 @@ class TorcsRLEnv(gym.Env):
     def __init__(
         self,
         *,
-        runtime_backend,
-        torcs_exe=None,
-        race_config="",
-        launch_log="torcs_launcher.log",
-        gui=False,
+        client,
         track_weight=0.3,
         heading_weight=0.15,
         steering_weight=0.01,
@@ -38,14 +31,7 @@ class TorcsRLEnv(gym.Env):
         low_progress_steps=150,
         low_progress_threshold=10.0,
     ):
-        self.runtime_backend = runtime_backend
-        self.runtime_target = self.runtime_backend.name
-        self.torcs_exe = str(Path(torcs_exe).expanduser()) if torcs_exe else ""
-        self.race_config = str(Path(race_config).expanduser()) if race_config else ""
-        self.launch_log = Path(launch_log).expanduser()
-        if not self.launch_log.is_absolute():
-            self.launch_log = Path(__file__).resolve().parent.parent / self.launch_log
-        self.gui = bool(gui)
+        self.client = client
 
         self.track_weight = float(track_weight)
         self.heading_weight = float(heading_weight)
@@ -60,20 +46,9 @@ class TorcsRLEnv(gym.Env):
         self.speed_scale = 300.0
         self.track_scale = 200.0
         self.rolling_speed = 15.0
-        self.min_speed_threshold = 30.0   # once reached, must stay above
-        self.min_speed_grace = 200        # steps below threshold before termination
-        self.port = 3001
+        self.min_speed_threshold = 30.0
+        self.min_speed_grace = 200
 
-        self.client = self.runtime_backend.create_client(
-            port=self.port,
-            vision=False,
-            torcs_exe=self.torcs_exe,
-            launch_log=str(self.launch_log),
-            race_config=self.race_config,
-            gui=self.gui,
-        )
-        self.torcs_pid = getattr(self.client, "torcs_pid", None)
-        self.client.MAX_STEPS = np.inf
         self.client.get_servers_input()
 
         self.action_space = spaces.Box(
@@ -99,33 +74,10 @@ class TorcsRLEnv(gym.Env):
         self.time_step = 0
         self._reset_episode_metrics()
 
-        previous_client = self.client
-        previous_pid = self.torcs_pid
         if not self.initial_reset:
-            try:
-                previous_client.R.d["meta"] = True
-                previous_client.respond_to_server()
-            except Exception:
-                pass
-            try:
-                previous_client.shutdown()
-            except Exception:
-                pass
-            if previous_pid is not None:
-                self.runtime_backend.kill_process(previous_pid, log_file=str(self.launch_log), port=self.port)
-                self.torcs_pid = None
+            self.client.reset_episode()
 
-        self.client = self.runtime_backend.create_client(
-            port=self.port,
-            vision=False,
-            torcs_exe=self.torcs_exe,
-            launch_log=str(self.launch_log),
-            race_config=self.race_config,
-            gui=self.gui,
-        )
-        self.torcs_pid = getattr(self.client, "torcs_pid", None)
-        self.client.MAX_STEPS = np.inf
-        self.client.get_servers_input()
+        self.client.did_crash = False
         self._initialize_progress(self.client.S.d)
         self.initial_reset = False
         return self._flatten_observation(self.client.S.d), {}
@@ -137,6 +89,27 @@ class TorcsRLEnv(gym.Env):
 
         self.client.respond_to_server()
         self.client.get_servers_input()
+
+        if self.client.did_crash:
+            reward = -self.terminal_penalty
+            obs = self._flatten_observation(self.client.S.d)
+            info = {
+                "raw_obs": self.client.S.d,
+                "torcs_action": torcs_action,
+                "lap_completed": False,
+                "completed_lap_time": float("nan"),
+                "current_lap_time": 0.0,
+                "laps_completed": int(self.laps_completed),
+                "last_lap_time": float(self.last_lap_time) if self.last_lap_time is not None else float("nan"),
+                "progress_distance": float(self.progress_distance),
+                "distance_raced": 0.0,
+                "mean_throttle": 0.0,
+                "mean_brake": 0.0,
+                "mean_speed": 0.0,
+                "max_speed": float(self.max_speed),
+                "termination_reason": "torcs_crash",
+            }
+            return obs, reward, True, False, info
 
         raw_obs = self.client.S.d
         self.time_step += 1
@@ -172,17 +145,9 @@ class TorcsRLEnv(gym.Env):
         return self._flatten_observation(raw_obs), float(reward), bool(terminated), bool(truncated), info
 
     def close(self):
-        self.end()
+        pass  # client lifecycle managed by caller
 
-    def end(self):
-        if self.torcs_pid is not None:
-            self.runtime_backend.kill_process(self.torcs_pid, log_file=str(self.launch_log), port=self.port)
-            self.torcs_pid = None
-        if getattr(self.client, "so", None):
-            try:
-                self.client.shutdown()
-            except Exception:
-                pass
+    # -- action helpers ----------------------------------------------------
 
     def _agent_to_torcs(self, action):
         steer = float(np.clip(action[0], -1.0, 1.0))
@@ -212,6 +177,8 @@ class TorcsRLEnv(gym.Env):
         action_torcs["brake"] = 0.0 if speed_x < self.rolling_speed else torcs_action["brake"]
         action_torcs["gear"] = self._hardcoded_gear(speed_x)
 
+    # -- reward ------------------------------------------------------------
+
     def _compute_reward(self, raw_obs, steer):
         speed_x = float(raw_obs.get("speedX", 0.0))
         track_pos = abs(float(raw_obs["trackPos"]))
@@ -221,14 +188,12 @@ class TorcsRLEnv(gym.Env):
         self.prev_dist_raced = progress_now
         self.progress_distance = max(progress_now - self.start_dist_raced, 0.0)
 
-        # Track speed threshold: once above 30, must stay above
         if speed_x >= self.min_speed_threshold:
             self.speed_went_above_threshold = True
             self.steps_below_min_speed = 0
         elif self.speed_went_above_threshold:
             self.steps_below_min_speed += 1
 
-        # Scaled speed reward: forward speed (speed_x * cos(angle)) normalized by speed_scale
         cos_angle = np.cos(float(raw_obs["angle"]))
         forward_speed = speed_x * max(cos_angle, 0.0)
         speed_reward = self.speed_weight * (forward_speed / self.speed_scale)
@@ -268,6 +233,8 @@ class TorcsRLEnv(gym.Env):
         self.progress_history.append(progress_now)
         return reward, terminated, termination_reason
 
+    # -- episode bookkeeping -----------------------------------------------
+
     def _reset_episode_metrics(self):
         self.laps_completed = 0
         self.last_lap_time = None
@@ -301,6 +268,8 @@ class TorcsRLEnv(gym.Env):
         if last_lap_time > 0.0:
             self.last_lap_marker = last_lap_time
         return False, float("nan")
+
+    # -- observation -------------------------------------------------------
 
     def _flatten_observation(self, raw_obs):
         return np.concatenate(

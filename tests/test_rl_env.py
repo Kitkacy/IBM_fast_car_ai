@@ -6,12 +6,6 @@ from torcs_rl.env import TorcsRLEnv
 
 class TestRlEnv(unittest.TestCase):
     def setUp(self):
-        self.mock_backend = MagicMock()
-        self.mock_backend.name = "mock"
-        self.mock_backend.default_torcs_exe = "torcs"
-        self.mock_backend.default_race_config = "config.xml"
-        self.mock_backend.default_autostart_script = "autostart.sh"
-
         self.mock_client = MagicMock()
         self.mock_client.S.d = {
             "speedX": 50.0,
@@ -22,9 +16,8 @@ class TestRlEnv(unittest.TestCase):
             "curLapTime": 0.0,
             "lastLapTime": 0.0,
         }
-        self.mock_backend.create_client.return_value = self.mock_client
 
-        self.env = TorcsRLEnv(runtime_backend=self.mock_backend)
+        self.env = TorcsRLEnv(client=self.mock_client)
 
     def test_reward_logic_standard(self):
         self.env.prev_dist_raced = 0.0

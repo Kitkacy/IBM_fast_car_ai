@@ -1,11 +1,10 @@
 # Change this to train, evaluate, sweep, or launch
-mode: train
+mode: sweep
 
 runtime:
-  torcs_exe: "../torcs/torcs/wtorcs.exe"
-  race_config: "../torcs/torcs/config/raceman/practice.xml"
-  target: native
-  gui: true
+  torcs_exe: "../../torcs/torcs/wtorcs.exe"
+  race_config: "../../torcs/torcs/config/raceman/practice.xml"
+  gui: false
   launch_log: "torcs_launcher.log"
 
 training:
@@ -22,11 +21,11 @@ environment:
   low_progress_threshold: 5.0
 
 reward:
-  track_weight: 0.3
-  heading_weight: 0.1
+  heading_weight: 0.6
+  speed_weight: 0.6
   steering_weight: 0.01
-  speed_weight: 0.01
-  terminal_penalty: 100.0
+  terminal_penalty: 400
+  track_weight: 0.6
 
 wandb:
   enabled: true
@@ -35,13 +34,13 @@ wandb:
 
 evaluation:
   model_path: null
-  eval_episodes: 1
-  eval_freq: 2000
-  max_episode_steps: 500
+  eval_episodes: 5
+  eval_freq: 4000
+  max_episode_steps: 4000
 
 sweep:
   count: 16
-  method: random
+  method: bayes
   metric:
     name: "eval/progress_score"
     goal: maximize

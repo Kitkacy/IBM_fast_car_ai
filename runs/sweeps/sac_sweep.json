@@ -1,5 +1,5 @@
 {
-  "method": "random",
+  "method": "bayes",
   "metric": {
     "name": "eval/progress_score",
     "goal": "maximize"

@@ -1,0 +1,54 @@
+\section{User Interface Design}
+\label{sec:uidesign}
+
+User interaction is organised around three complementary interfaces. The first is the command-line entry point in \texttt{main.py}, which launches training, evaluation, sweep, or best-model execution using parameters loaded from \texttt{config.yaml}. This keeps experiment setup in one place: runtime paths, algorithm choice, reward weights, logging options, and evaluation settings are all configured in YAML. The second interface is the TORCS simulator window. When \texttt{gui=true} in \texttt{config.yaml}, TORCS is launched with a visible GUI so the user can observe the agent's behaviour in real time, although the window is intended for visual monitoring rather than user interaction. The third interface consists of TensorBoard and W\&B. TensorBoard is used both by the SB3 logger for console-linked training feedback and for the local web dashboard backed by event files, while W\&B provides a browser-based interface for comparing runs, reviewing metrics, exploring sweep results, and downloading persisted artifacts.
+
+\section{Persistence Design}
+\label{sec:database}
+
+The system does not rely on a relational or document database. Instead, it uses structured filesystem persistence for run outputs, with selected results additionally mirrored to W\&B for remote inspection and artifact retention. The main persistence locations are summarised in Table~\ref{tab:artifacts}.
+
+\begin{table}[H]
+  \caption{Persistence Structure}
+  \label{tab:artifacts}
+  \centering
+  \begin{tabular}{p{0.40\linewidth} p{0.50\linewidth}}
+    \toprule
+    \textbf{Path} & \textbf{Contents} \\
+    \midrule
+    \texttt{runs/<name>/models/} & SB3 model checkpoints (\texttt{.zip}) \\
+    \texttt{runs/<name>/checkpoints/} & Periodic intermediate checkpoints \\
+    \texttt{runs/<name>/tensorboard/} & TensorBoard event files \\
+    \texttt{runs/<name>/eval/evaluation\_summary.json} & Final evaluation statistics \\
+    \texttt{runs/<name>/train\_monitor.csv} & VecMonitor episode log \\
+    \texttt{runs/<name>/lap\_events.csv} & Per-lap timing events \\
+    \texttt{runs/<name>/summary.json} & Consolidated run summary \\
+    \texttt{best\_models/} & Copy of all-time best checkpoint \\
+    \texttt{wandb/} & Local W\&B run metadata and sync state \\
+    W\&B artifact store & Uploaded copies of selected outputs such as the final model, summaries, and lap statistics \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+
+\section{Frameworks and Libraries}
+\label{sec:frameworks}
+
+\begin{table}[H]
+  \caption{Key Python Libraries and Modules}
+  \label{tab:libs}
+  \centering
+  \begin{tabular}{p{0.30\linewidth} p{0.15\linewidth} p{0.45\linewidth}}
+    \toprule
+    \textbf{Library} & \textbf{Version} & \textbf{Role} \\
+    \midrule
+    \texttt{gymnasium} & $\geq$1.2.3 & Standard RL environment API \\
+    \texttt{stable-baselines3} & $\geq$2.8.0 & PPO, SAC, TD3 implementations \\
+    \texttt{tensorboard} & $\geq$2.19.0 & Event logging, local dashboard visualisation, and metric export for synced experiment tracking \\
+    \texttt{wandb} & $\geq$0.19.11 & Experiment tracking, hyperparameter sweeps, remote run comparison, and artifact storage \\
+    \texttt{numpy} & latest & Numerical observation processing and metric aggregation \\
+    \texttt{socket} (stdlib) & Python standard library & UDP communication between the Python client and the TORCS SCR server \\
+    \texttt{pyyaml} & $\geq$6.0 & YAML configuration parsing \\
+    \bottomrule
+  \end{tabular}
+\end{table}
