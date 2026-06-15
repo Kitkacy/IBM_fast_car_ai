@@ -119,7 +119,7 @@ class Client:
 
         failures = 0
         # GUI mode takes much longer for TORCS to render and start the SCR server
-        max_failures = 600 if self.gui else 60
+        max_failures = 6000 if self.gui else 60
         while True:
             a = "-45 -19 -12 -7 -4 -2.5 -1.7 -1 -.5 0 .5 1 1.7 2.5 4 7 12 19 45"
             initmsg = "%s(init %s)" % (self.sid, a)

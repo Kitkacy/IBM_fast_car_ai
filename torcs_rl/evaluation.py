@@ -8,6 +8,11 @@ from stable_baselines3.common.vec_env import sync_envs_normalization
 
 from .utils import safe_float, write_json, append_csv_row
 
+try:
+    import wandb
+except Exception:
+    wandb = None
+
 
 def _learning_status(model):
     learning_starts = getattr(model, "learning_starts", None)
@@ -171,6 +176,14 @@ class LapLoggerCallback(BaseCallback):
             if info.get("lap_completed") and completed_lap_time is not None:
                 self.logger.record(f"{self.prefix}/lap_time", completed_lap_time)
                 self.logger.record(f"{self.prefix}/laps_completed", float(info.get("laps_completed", 0)))
+                if wandb is not None and getattr(wandb, "run", None) is not None:
+                    wandb.log(
+                        {
+                            f"{self.prefix}/lap_time": completed_lap_time,
+                            f"{self.prefix}/laps_completed": float(info.get("laps_completed", 0)),
+                        },
+                        step=int(self.num_timesteps),
+                    )
                 if self.lap_events_path is not None:
                     append_csv_row(
                         self.lap_events_path,
@@ -201,6 +214,10 @@ class LapLoggerCallback(BaseCallback):
 
             self.logger.record(f"{self.prefix}/episode_reward", float(info["episode"]["r"]))
             self.logger.record(f"{self.prefix}/episode_length", float(info["episode"]["l"]))
+            wandb_payload = {
+                f"{self.prefix}/episode_reward": float(info["episode"]["r"]),
+                f"{self.prefix}/episode_length": float(info["episode"]["l"]),
+            }
             for key in (
                 "laps_completed",
                 "last_lap_time",
@@ -214,6 +231,9 @@ class LapLoggerCallback(BaseCallback):
                 metric = safe_float(info["episode"].get(key))
                 if metric is not None:
                     self.logger.record(f"{self.prefix}/{key}", metric)
+                    wandb_payload[f"{self.prefix}/{key}"] = metric
+            if wandb is not None and getattr(wandb, "run", None) is not None:
+                wandb.log(wandb_payload, step=int(self.num_timesteps))
         return True
 
 
@@ -326,6 +346,31 @@ class TorcsEvalCallback(EvalCallback):
             self.logger.record("eval/best_lap_time", lap_stats["eval_best_lap_time"])
         if lap_stats["eval_lap_time_iqr"] is not None:
             self.logger.record("eval/lap_time_iqr", lap_stats["eval_lap_time_iqr"])
+
+        if wandb is not None and getattr(wandb, "run", None) is not None:
+            wandb_payload = {
+                "eval/mean_reward": mean_reward,
+                "eval/mean_ep_length": mean_ep_length,
+                "eval/completed_laps": float(lap_stats["eval_completed_laps"]),
+                "eval/lap_completion_rate": float(lap_stats["eval_lap_completion_rate"]),
+                "eval/timed_laps": float(lap_stats["eval_timed_laps"]),
+                "eval/timed_lap_completion_rate": float(lap_stats["eval_timed_lap_completion_rate"]),
+                "eval/off_track_rate": float(lap_stats["eval_off_track_rate"]),
+                "eval/mean_progress": float(lap_stats["eval_mean_progress"]),
+                "eval/progress_score": float(lap_stats["eval_progress_score"]),
+                "eval/mean_distance_raced": float(lap_stats["eval_mean_distance_raced"]),
+                "eval/mean_throttle": float(lap_stats["eval_mean_throttle"]),
+                "eval/mean_brake": float(lap_stats["eval_mean_brake"]),
+                "eval/mean_speed": float(lap_stats["eval_mean_speed"]),
+                "eval/max_speed": float(lap_stats["eval_max_speed"]),
+            }
+            if lap_stats["eval_median_lap_time"] is not None:
+                wandb_payload["eval/median_lap_time"] = lap_stats["eval_median_lap_time"]
+            if lap_stats["eval_best_lap_time"] is not None:
+                wandb_payload["eval/best_lap_time"] = lap_stats["eval_best_lap_time"]
+            if lap_stats["eval_lap_time_iqr"] is not None:
+                wandb_payload["eval/lap_time_iqr"] = lap_stats["eval_lap_time_iqr"]
+            wandb.log(wandb_payload, step=int(self.num_timesteps))
 
         self.logger.record("time/total_timesteps", self.num_timesteps, exclude="tensorboard")
         self.logger.dump(self.num_timesteps)

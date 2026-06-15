@@ -1,18 +1,20 @@
+from __future__ import annotations
+
 import json
 import msvcrt
-import os
-import time
 from contextlib import contextmanager
 from pathlib import Path
+from typing import Any
 
 import numpy as np
 from stable_baselines3.common.callbacks import CallbackList, CheckpointCallback
+from stable_baselines3.common.logger import configure
 from stable_baselines3.common.vec_env import DummyVecEnv, VecMonitor
 
-from .algorithms import apply_wandb_overrides, build_wandb_run_config, get_algorithm_registry
-from .config import REWARD_WEIGHTS
+from .algorithms import build_algorithm
+from .config import AppConfig
 from .env import MONITOR_INFO_KEYS, TorcsRLEnv
-from .evaluation import LapLoggerCallback, evaluate_with_lap_stats
+from .evaluation import LapLoggerCallback, TorcsEvalCallback, evaluate_with_lap_stats
 from .runtime import create_runtime_backend
 from .utils import write_json
 
@@ -22,15 +24,20 @@ except Exception:
     wandb = None
 
 
-def _build_run_name(args, *, sweep_mode):
-    if not sweep_mode:
-        return str(args.run_name)
-    timestamp = time.strftime("%Y%m%d-%H%M%S")
-    return f"{args.run_name}-{args.algo}-sweep-{timestamp}-{os.getpid()}"
+def _jsonable(value: Any):
+    if isinstance(value, Path):
+        return str(value)
+    if isinstance(value, dict):
+        return {str(key): _jsonable(item) for key, item in value.items()}
+    if isinstance(value, (list, tuple)):
+        return [_jsonable(item) for item in value]
+    if callable(value):
+        return str(value)
+    return value
 
 
 @contextmanager
-def _torcs_port_lock(log_dir):
+def _torcs_port_lock(log_dir: Path):
     lock_path = Path(log_dir) / "torcs-3001.lock"
     lock_path.parent.mkdir(parents=True, exist_ok=True)
     with lock_path.open("a+b") as lock_file:
@@ -52,65 +59,68 @@ def _torcs_port_lock(log_dir):
             msvcrt.locking(lock_file.fileno(), msvcrt.LK_UNLCK, 1)
 
 
-def _build_env(**kwargs):
-    return TorcsRLEnv(**kwargs)
-
-
-def _build_vec_env(*, monitor_path, **kwargs):
-    return VecMonitor(
-        DummyVecEnv([lambda: _build_env(**kwargs)]),
-        filename=str(monitor_path),
-        info_keywords=MONITOR_INFO_KEYS,
-    )
-
-
-def _patch_wandb_tensorboard(tb_dir):
-    if wandb is None:
-        return False
-    try:
-        wandb.tensorboard.patch(root_logdir=str(tb_dir), save=False)
-        return True
-    except Exception as exc:
-        print(f"[W&B] TensorBoard patch warning: {exc}")
-        return False
-
-
-def _log_wandb_artifact(wandb_run, run_name, paths):
+def _log_wandb_artifact(wandb_run, run_name: str, paths: tuple[Path, ...]) -> None:
     if wandb_run is None or wandb is None:
         return
     try:
         artifact = wandb.Artifact(f"{run_name}-artifacts", type="torcs-run")
         for path in paths:
-            file_path = Path(path)
-            if file_path.exists():
-                artifact.add_file(str(file_path))
+            if path.exists():
+                artifact.add_file(str(path))
         wandb_run.log_artifact(artifact)
     except Exception as exc:
         print(f"[W&B] Artifact upload warning: {exc}")
 
 
-def _build_summary(args, algorithm_name, model, lap_stats, **extra):
-    reward_weights = {
-        k: float(getattr(args, k, v))
-        for k, v in REWARD_WEIGHTS.items()
-        if hasattr(args, k)
-    }
+def _env_kwargs(config: AppConfig, runtime_backend, *, max_episode_steps: int) -> dict[str, Any]:
     return {
-        "algo": algorithm_name,
+        "runtime_backend": runtime_backend,
+        "torcs_exe": str(config.torcs_exe) if config.torcs_exe else None,
+        "launch_log": config.launch_log,
+        "gui": config.gui,
+        "race_config": str(config.race_config) if config.race_config else None,
+        "track_weight": config.track_weight,
+        "heading_weight": config.heading_weight,
+        "steering_weight": config.steering_weight,
+        "speed_weight": config.speed_weight,
+        "terminal_penalty": config.terminal_penalty,
+        "max_episode_steps": max_episode_steps,
+        "low_progress_steps": config.low_progress_steps,
+        "low_progress_threshold": config.low_progress_threshold,
+    }
+
+
+def _vec_env(monitor_path: Path, config: AppConfig, runtime_backend, *, max_episode_steps: int):
+    kwargs = _env_kwargs(config, runtime_backend, max_episode_steps=max_episode_steps)
+    return VecMonitor(
+        DummyVecEnv([lambda: TorcsRLEnv(**kwargs)]),
+        filename=str(monitor_path),
+        info_keywords=MONITOR_INFO_KEYS,
+    )
+
+
+def _set_tensorboard_logger(model, tb_dir: Path) -> None:
+    model.set_logger(configure(str(tb_dir), ["stdout", "tensorboard"]))
+
+
+def _summary(config: AppConfig, algo: str, model, lap_stats: dict[str, Any], **extra) -> dict[str, Any]:
+    return {
+        "mode": config.mode,
+        "algo": algo,
         "timesteps": int(getattr(model, "num_timesteps", 0)),
-        "runtime_target": args.runtime_target,
-        "gui": bool(args.gui),
-        "reward_weights": reward_weights,
+        "runtime_target": config.runtime_target,
+        "gui": bool(config.gui),
+        "reward_weights": config.reward_weights,
         **lap_stats,
         **extra,
     }
 
 
-def _save_final_evaluation(model, eval_env, args, eval_dir, lap_events_path):
+def _save_final_evaluation(model, env, config: AppConfig, eval_dir: Path, lap_events_path: Path):
     episode_rewards, episode_lengths, lap_stats, episode_metrics = evaluate_with_lap_stats(
         model,
-        eval_env,
-        n_eval_episodes=args.eval_episodes,
+        env,
+        n_eval_episodes=config.eval_episodes,
         deterministic=True,
         render=False,
         warn=True,
@@ -123,92 +133,102 @@ def _save_final_evaluation(model, eval_env, args, eval_dir, lap_events_path):
     return episode_rewards, episode_lengths, lap_stats
 
 
-def _validate_saved_action_space(model_cls, model_path):
+def _validate_saved_action_space(model_cls, model_path: Path):
     model = model_cls.load(str(model_path))
     try:
         action_dim = int(np.prod(model.action_space.shape))
     finally:
         del model
-    if action_dim == 2:
-        return
-    raise ValueError(
-        f"Unsupported checkpoint action dimension: {action_dim}. "
-        "Current TORCS RL only supports steering plus signed pedal."
-    )
+    if action_dim != 2:
+        raise ValueError(
+            f"Unsupported checkpoint action dimension: {action_dim}. "
+            "Current TORCS RL only supports steering plus signed pedal."
+        )
 
 
-def _evaluate_only(args):
-    runtime_backend = create_runtime_backend(args.runtime_target)
-    algorithm_name = str(args.algo).lower()
-    model_cls, _ = get_algorithm_registry()[algorithm_name]
-    run_dir = Path(args.log_dir) / args.run_name
+def _find_best_model_path(config: AppConfig) -> Path:
+    best_models_dir = Path("best_models")
+    if not best_models_dir.exists():
+        raise FileNotFoundError("No best_models directory found for launch mode.")
+
+    candidates = sorted(best_models_dir.glob(f"best_{config.algo}_t*.zip"))
+    if not candidates:
+        raise FileNotFoundError(f"No best model found for algorithm '{config.algo}' in best_models.")
+
+    def sort_key(path: Path) -> tuple[int, float]:
+        stem = path.stem
+        marker = "_t"
+        if marker in stem:
+            try:
+                return int(stem.rsplit(marker, 1)[1]), path.stat().st_mtime
+            except (ValueError, OSError):
+                pass
+        try:
+            modified = path.stat().st_mtime
+        except OSError:
+            modified = 0.0
+        return -1, modified
+
+    return max(candidates, key=sort_key)
+
+
+def _evaluate(config: AppConfig, model_path: Path | None = None) -> None:
+    model_path = model_path or config.evaluate_model
+    if model_path is None:
+        raise ValueError("Evaluation requires a model path.")
+
+    runtime_backend = create_runtime_backend(config.runtime_target)
+    model_cls, _ = build_algorithm(config)
+    run_dir = config.log_dir / config.run_name
     eval_dir = run_dir / "eval"
     lap_events_path = run_dir / "lap_events.csv"
     eval_dir.mkdir(parents=True, exist_ok=True)
 
-    torcs_exe = str(args.torcs_exe) if args.torcs_exe else None
-    _validate_saved_action_space(model_cls, args.evaluate_model)
+    _validate_saved_action_space(model_cls, model_path)
 
-    env_kwargs = dict(
-        runtime_backend=runtime_backend,
-        torcs_exe=torcs_exe,
-        launch_log=args.launch_log,
-        gui=args.gui,
-        race_config=str(args.race_config) if args.race_config else None,
-        track_weight=args.track_weight,
-        heading_weight=args.heading_weight,
-        steering_weight=args.steering_weight,
-        terminal_penalty=args.terminal_penalty,
-        max_episode_steps=args.max_episode_steps,
-        low_progress_steps=args.low_progress_steps,
-        low_progress_threshold=args.low_progress_threshold,
-    )
-    with _torcs_port_lock(args.log_dir):
-        eval_env = _build_vec_env(monitor_path=run_dir / "eval_monitor.csv", **env_kwargs)
-        model = model_cls.load(str(args.evaluate_model), env=eval_env)
-
+    with _torcs_port_lock(config.log_dir):
+        eval_env = _vec_env(
+            run_dir / "eval_monitor.csv",
+            config,
+            runtime_backend,
+            max_episode_steps=config.eval_max_episode_steps,
+        )
+        model = model_cls.load(str(model_path), env=eval_env)
         try:
             episode_rewards, episode_lengths, lap_stats = _save_final_evaluation(
                 model,
                 eval_env,
-                args,
+                config,
                 eval_dir,
                 lap_events_path,
             )
-            summary = _build_summary(
-                args,
-                algorithm_name,
+            summary = _summary(
+                config,
+                config.algo,
                 model,
                 lap_stats,
                 interrupted=False,
-                mode="evaluation",
-                model_path=str(Path(args.evaluate_model)),
+                model_path=str(model_path),
                 mean_reward=float(np.mean(episode_rewards)),
                 std_reward=float(np.std(episode_rewards)),
                 mean_episode_length=float(np.mean(episode_lengths)),
             )
             write_json(run_dir / "summary.json", summary)
-            if not lap_stats.get("learning_started", True):
-                print(
-                    f"[Evaluation Warning] Timesteps {model.num_timesteps} did not pass "
-                    f"learning_starts={lap_stats.get('learning_starts')}"
-                )
-            if lap_stats.get("eval_low_movement_warning"):
-                print("[Evaluation Warning] The model showed very little movement and may not be getting out of the launch phase.")
             print("[Evaluation Complete]", json.dumps(summary))
         finally:
             eval_env.close()
 
 
-def train_and_evaluate(args):
-    if getattr(args, "evaluate_model", None):
-        _evaluate_only(args)
+def train_and_evaluate(config: AppConfig) -> None:
+    if config.mode == "evaluate":
+        _evaluate(config)
+        return
+    if config.mode == "launch":
+        _evaluate(config, _find_best_model_path(config))
         return
 
-    runtime_backend = create_runtime_backend(args.runtime_target)
-    sweep_mode = getattr(args, "sweep_mode", False)
-    args.run_name = _build_run_name(args, sweep_mode=sweep_mode)
-    run_dir = Path(args.log_dir) / args.run_name
+    runtime_backend = create_runtime_backend(config.runtime_target)
+    run_dir = config.log_dir / config.run_name
     tb_dir = run_dir / "tensorboard"
     ckpt_dir = run_dir / "checkpoints"
     eval_dir = run_dir / "eval"
@@ -217,72 +237,56 @@ def train_and_evaluate(args):
     for directory in (run_dir, tb_dir, ckpt_dir, eval_dir, model_dir):
         directory.mkdir(parents=True, exist_ok=True)
 
-    generated_sweep_config = getattr(args, "generated_sweep_config", None)
-    if generated_sweep_config is not None:
-        write_json(run_dir / "sweep_config.json", generated_sweep_config)
-
-    algorithm_registry = get_algorithm_registry()
-    algorithm_name = str(args.algo).lower()
-    if algorithm_name not in algorithm_registry:
-        raise ValueError(f"Unsupported algo: {args.algo}")
-    model_cls, algo_kwargs_builder = algorithm_registry[algorithm_name]
-    algorithm_hyperparameters = algo_kwargs_builder(seed=args.seed)
-
+    model_cls, algorithm_hyperparameters = build_algorithm(config)
     wandb_run = None
-    patched_tensorboard = False
-    if args.wandb:
+    wandb_enabled = config.wandb or config.mode == "launch" or config.mode == "sweep"
+    if wandb_enabled:
         if wandb is None:
             raise RuntimeError("W&B integration requested but wandb is not installed.")
-        patched_tensorboard = _patch_wandb_tensorboard(tb_dir)
-        if sweep_mode:
-            # In sweep mode the agent owns the run and its config.
-            # Reuse the existing run if available; otherwise init WITHOUT
-            # a config dict so we don't fight the sweep's values.
+        if config.mode == "sweep":
             wandb_run = getattr(wandb, "run", None)
             if wandb_run is None:
                 wandb_run = wandb.init(
-                    project=args.wandb_project,
-                    entity=args.wandb_entity,
-                    name=args.run_name,
+                    project=config.wandb_project,
+                    entity=config.wandb_entity,
+                    name=config.run_name,
                     job_type="training",
+                    sync_tensorboard=True,
+                    monitor_gym=True,
+                    save_code=True,
                 )
         else:
             wandb_run = wandb.init(
-                project=args.wandb_project,
-                entity=args.wandb_entity,
-                name=args.run_name,
+                project=config.wandb_project,
+                entity=config.wandb_entity,
+                name=config.run_name,
                 job_type="training",
-                sync_tensorboard=False,
+                sync_tensorboard=True,
                 monitor_gym=True,
                 save_code=True,
-                config=build_wandb_run_config(args, algorithm_hyperparameters),
+                config={
+                    "mode": config.mode,
+                    "algo": config.algo,
+                    "timesteps": config.timesteps,
+                    "seed": config.seed,
+                    "eval_episodes": config.eval_episodes,
+                    "checkpoint_freq": config.checkpoint_freq,
+                    "runtime_target": config.runtime_target,
+                    "run_name": config.run_name,
+                    "gui": config.gui,
+                    "reward_weights": config.reward_weights,
+                    "algorithm_hyperparameters": _jsonable(algorithm_hyperparameters),
+                },
             )
-        if sweep_mode:
-            args.wandb_allow_config = True
-        args, algorithm_hyperparameters = apply_wandb_overrides(args, algorithm_hyperparameters, wandb_run)
-        algorithm_name = str(args.algo).lower()
-        model_cls, _ = algorithm_registry[algorithm_name]
 
-    torcs_exe = str(args.torcs_exe) if args.torcs_exe else None
-    race_config = str(args.race_config) if getattr(args, "race_config", None) else None
-
-    env_kwargs = dict(
-        runtime_backend=runtime_backend,
-        torcs_exe=torcs_exe,
-        launch_log=args.launch_log,
-        gui=args.gui,
-        race_config=race_config,
-        track_weight=args.track_weight,
-        heading_weight=args.heading_weight,
-        steering_weight=args.steering_weight,
-        terminal_penalty=args.terminal_penalty,
-        max_episode_steps=args.max_episode_steps,
-        low_progress_steps=args.low_progress_steps,
-        low_progress_threshold=args.low_progress_threshold,
-    )
-    with _torcs_port_lock(args.log_dir):
-        train_env = _build_vec_env(monitor_path=run_dir / "train_monitor.csv", **env_kwargs)
-        model_key = f"{algorithm_name}_torcs"
+    with _torcs_port_lock(config.log_dir):
+        train_env = _vec_env(
+            run_dir / "train_monitor.csv",
+            config,
+            runtime_backend,
+            max_episode_steps=config.max_episode_steps,
+        )
+        model_key = f"{config.algo}_torcs"
         latest_model_path = model_dir / f"{model_key}_latest.zip"
         final_model_base = model_dir / f"{model_key}_final"
         final_model_path = final_model_base.with_suffix(".zip")
@@ -294,28 +298,55 @@ def train_and_evaluate(args):
             except ValueError:
                 print(f"[Model] Not resuming incompatible checkpoint: {latest_model_path}")
                 model = model_cls("MlpPolicy", train_env, tensorboard_log=str(tb_dir), **algorithm_hyperparameters)
+                _set_tensorboard_logger(model, tb_dir)
             else:
                 model = model_cls.load(str(latest_model_path), env=train_env)
+                _set_tensorboard_logger(model, tb_dir)
                 resumed_from = str(latest_model_path)
                 print(f"[Model] Resumed from latest model: {latest_model_path}")
         else:
             model = model_cls("MlpPolicy", train_env, tensorboard_log=str(tb_dir), **algorithm_hyperparameters)
+            _set_tensorboard_logger(model, tb_dir)
 
         callbacks = [
             CheckpointCallback(
-                save_freq=max(1, args.checkpoint_freq),
+                save_freq=max(1, config.checkpoint_freq),
                 save_path=str(ckpt_dir),
                 name_prefix=model_key,
                 save_vecnormalize=True,
             ),
             LapLoggerCallback(prefix="train", lap_events_path=lap_events_path),
         ]
+        eval_env = _vec_env(
+            run_dir / "eval_monitor.csv",
+            config,
+            runtime_backend,
+            max_episode_steps=config.eval_max_episode_steps,
+        )
+        callbacks.append(
+            TorcsEvalCallback(
+                eval_env,
+                best_model_save_path=str(model_dir),
+                log_path=str(eval_dir / "evaluations.npz"),
+                eval_freq=max(1, config.eval_freq),
+                n_eval_episodes=config.eval_episodes,
+                deterministic=True,
+                render=False,
+                verbose=1,
+                lap_events_path=lap_events_path,
+            )
+        )
 
         summary_path = run_dir / "summary.json"
         try:
             interrupted = False
             try:
-                model.learn(total_timesteps=args.timesteps, callback=CallbackList(callbacks), progress_bar=True)
+                model.learn(
+                    total_timesteps=config.timesteps,
+                    callback=CallbackList(callbacks),
+                    progress_bar=True,
+                    tb_log_name="",
+                )
             except KeyboardInterrupt:
                 interrupted = True
                 print("[Training Interrupted] KeyboardInterrupt received, saving latest checkpoint...")
@@ -323,9 +354,9 @@ def train_and_evaluate(args):
             model.save(str(latest_model_path))
 
             if interrupted:
-                summary = _build_summary(
-                    args,
-                    algorithm_name,
+                summary = _summary(
+                    config,
+                    config.algo,
                     model,
                     {},
                     interrupted=True,
@@ -341,19 +372,19 @@ def train_and_evaluate(args):
             model.save(str(final_model_base))
             best_models_dir = Path("best_models")
             best_models_dir.mkdir(parents=True, exist_ok=True)
-            final_best_path = best_models_dir / f"best_{algorithm_name}_t{int(model.num_timesteps)}.zip"
+            final_best_path = best_models_dir / f"best_{config.algo}_t{int(model.num_timesteps)}.zip"
             model.save(str(final_best_path))
             print(f"[Best Model] Saved to {final_best_path}")
             episode_rewards, episode_lengths, lap_stats = _save_final_evaluation(
                 model,
                 train_env,
-                args,
+                config,
                 eval_dir,
                 lap_events_path,
             )
-            summary = _build_summary(
-                args,
-                algorithm_name,
+            summary = _summary(
+                config,
+                config.algo,
                 model,
                 lap_stats,
                 interrupted=False,
@@ -365,18 +396,11 @@ def train_and_evaluate(args):
                 resumed_from=resumed_from,
             )
             write_json(summary_path, summary)
-            if not lap_stats.get("learning_started", True):
-                print(
-                    f"[Training Warning] Timesteps {model.num_timesteps} did not pass "
-                    f"learning_starts={lap_stats.get('learning_starts')}"
-                )
-            if lap_stats.get("eval_low_movement_warning"):
-                print("[Training Warning] Final evaluation showed very little movement and may not be getting out of the launch phase.")
             if wandb_run is not None:
                 wandb_run.summary.update(summary)
                 _log_wandb_artifact(
                     wandb_run,
-                    args.run_name,
+                    config.run_name,
                     (
                         summary_path,
                         eval_dir / "evaluation_summary.json",
@@ -390,10 +414,9 @@ def train_and_evaluate(args):
                 train_env.close()
             except Exception:
                 pass
-            if wandb_run is not None and not sweep_mode:
+            try:
+                eval_env.close()
+            except Exception:
+                pass
+            if wandb_run is not None and config.mode != "sweep":
                 wandb_run.finish()
-            if patched_tensorboard and wandb is not None:
-                try:
-                    wandb.tensorboard.unpatch()
-                except Exception:
-                    pass

@@ -1,23 +1,14 @@
-import argparse
-
-from torcs_rl import parse_args, train_and_evaluate
-from torcs_rl.config import build_config_namespace
+from torcs_rl import train_and_evaluate
+from torcs_rl.config import load_config
 
 
 def main() -> None:
-    cli_args = parse_args()
-    args = build_config_namespace(cli_args)
-
-    if args.sweep:
+    config = load_config()
+    if config.mode == "sweep":
         from torcs_rl.sweep import launch_sweep
-        launch_sweep(args)
-    elif args.launch:
-        # Force W&B on and allow all config overrides so W&B Launch can parameterise the run.
-        args.wandb = True
-        args.wandb_allow_config = True
-        train_and_evaluate(args)
+        launch_sweep(config)
     else:
-        train_and_evaluate(args)
+        train_and_evaluate(config)
 
 
 if __name__ == "__main__":

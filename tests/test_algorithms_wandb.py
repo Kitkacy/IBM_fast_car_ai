@@ -1,69 +1,43 @@
-"""Unit tests for torcs_rl.algorithms — W&B config & override logic."""
+"""Unit tests for torcs_rl.algorithms."""
 
-import argparse
-import unittest
+from dataclasses import replace
 from pathlib import Path
+import unittest
 from unittest.mock import MagicMock
 
 from torcs_rl.algorithms import (
+    apply_wandb_overrides,
     build_ppo_hyperparameters,
     build_sac_hyperparameters,
     build_td3_hyperparameters,
     build_wandb_run_config,
-    apply_wandb_overrides,
     get_algorithm_registry,
     to_json_serializable,
 )
-from torcs_rl.config import (
-    DEFAULT_ALGORITHM,
-    DEFAULT_SEED,
-    DEFAULT_TIMESTEPS,
-    DEFAULT_EVAL_EPISODES,
-    DEFAULT_CHECKPOINT_FREQ,
-    DEFAULT_TRACK_WEIGHT,
-    DEFAULT_HEADING_WEIGHT,
-    DEFAULT_STEERING_WEIGHT,
-    DEFAULT_TERMINAL_PENALTY,
-    DEFAULT_GUI,
-)
+from torcs_rl.config import load_config
 
 
-def _make_args(**overrides):
-    defaults = dict(
-        algo=DEFAULT_ALGORITHM,
-        timesteps=DEFAULT_TIMESTEPS,
-        run_name="test",
-        gui=DEFAULT_GUI,
-        seed=DEFAULT_SEED,
-        eval_episodes=DEFAULT_EVAL_EPISODES,
-        checkpoint_freq=DEFAULT_CHECKPOINT_FREQ,
-        runtime_target="native",
-        track_weight=DEFAULT_TRACK_WEIGHT,
-        heading_weight=DEFAULT_HEADING_WEIGHT,
-        steering_weight=DEFAULT_STEERING_WEIGHT,
-        terminal_penalty=DEFAULT_TERMINAL_PENALTY,
-        wandb_allow_config=False,
-    )
-    defaults.update(overrides)
-    return argparse.Namespace(**defaults)
+def _make_config(**overrides):
+    config = replace(load_config(), run_name="test", wandb_allow_config=False)
+    return replace(config, **overrides)
 
 
 class TestHyperparameters(unittest.TestCase):
     def test_ppo_returns_dict(self):
-        params = build_ppo_hyperparameters(42)
+        params = build_ppo_hyperparameters(_make_config(seed=42))
         self.assertIsInstance(params, dict)
         self.assertIn("n_steps", params)
         self.assertIn("learning_rate", params)
         self.assertEqual(params["seed"], 42)
 
     def test_sac_returns_dict(self):
-        params = build_sac_hyperparameters(42)
+        params = build_sac_hyperparameters(_make_config(seed=42))
         self.assertIn("buffer_size", params)
         self.assertIn("batch_size", params)
         self.assertEqual(params["seed"], 42)
 
     def test_td3_returns_dict(self):
-        params = build_td3_hyperparameters(42)
+        params = build_td3_hyperparameters(_make_config(seed=42))
         self.assertIn("policy_delay", params)
         self.assertEqual(params["seed"], 42)
 
@@ -73,7 +47,7 @@ class TestAlgorithmRegistry(unittest.TestCase):
         registry = get_algorithm_registry()
         for algo in ("ppo", "sac", "td3"):
             self.assertIn(algo, registry)
-            model_cls, builder = registry[algo]
+            _, builder = registry[algo]
             self.assertTrue(callable(builder))
 
 
@@ -86,7 +60,6 @@ class TestToJsonSerializable(unittest.TestCase):
         self.assertIsNone(to_json_serializable(None))
 
     def test_path(self):
-        from pathlib import Path
         self.assertEqual(to_json_serializable(Path("a/b")), "a\\b")
 
     def test_callable(self):
@@ -94,79 +67,67 @@ class TestToJsonSerializable(unittest.TestCase):
         self.assertIsInstance(result, str)
 
     def test_dict(self):
-        from pathlib import Path as P
-        result = to_json_serializable({"a": 1, "b": P("x")})
+        result = to_json_serializable({"a": 1, "b": Path("x")})
         self.assertEqual(result["a"], 1)
         self.assertIsInstance(result["b"], str)
 
 
 class TestBuildWandbRunConfig(unittest.TestCase):
     def test_contains_base_keys(self):
-        args = _make_args()
-        algo_hp = build_ppo_hyperparameters(42)
-        config = build_wandb_run_config(args, algo_hp)
-        self.assertEqual(config["algo"], args.algo)
-        self.assertEqual(config["timesteps"], DEFAULT_TIMESTEPS)
-        self.assertEqual(config["seed"], DEFAULT_SEED)
+        config = _make_config()
+        algo_hp = build_ppo_hyperparameters(config)
+        payload = build_wandb_run_config(config, algo_hp)
+        self.assertEqual(payload["algo"], config.algo)
+        self.assertEqual(payload["timesteps"], config.timesteps)
+        self.assertEqual(payload["seed"], config.seed)
 
-    def test_contains_direct_algo_keys(self):
-        args = _make_args(algo="ppo")
-        algo_hp = build_ppo_hyperparameters(42)
-        config = build_wandb_run_config(args, algo_hp)
-        self.assertIn("n_steps", config)
-        self.assertIn("learning_rate", config)
-        self.assertIn("batch_size", config)
-        self.assertEqual(config["reward_weights"]["track_weight"], args.track_weight)
+    def test_contains_reward_weights(self):
+        config = _make_config(algo="ppo")
+        payload = build_wandb_run_config(config, build_ppo_hyperparameters(config))
+        self.assertEqual(payload["reward_weights"]["track_weight"], config.track_weight)
+        self.assertEqual(payload["reward_weights"]["speed_weight"], config.speed_weight)
 
-    def test_sac_keys(self):
-        args = _make_args(algo="sac")
-        algo_hp = build_sac_hyperparameters(42)
-        config = build_wandb_run_config(args, algo_hp)
-        self.assertIn("buffer_size", config)
-        self.assertIn("learning_rate", config)
+    def test_sac_exposes_configurable_sac_keys(self):
+        config = _make_config(algo="sac")
+        payload = build_wandb_run_config(config, build_sac_hyperparameters(config))
+        self.assertIn("sac_learning_rate", payload)
+        self.assertIn("sac_batch_size", payload)
 
 
 class TestApplyWandbOverrides(unittest.TestCase):
     def test_noop_when_allow_config_false(self):
-        args = _make_args(wandb_allow_config=False)
-        algo_hp = build_ppo_hyperparameters(42)
-        mock_run = MagicMock()
-        mock_run.config = {"learning_rate": 1e-3}
-        new_args, new_hp = apply_wandb_overrides(args, algo_hp, mock_run)
-        self.assertEqual(new_hp["learning_rate"], algo_hp["learning_rate"])
-
-    def test_noop_when_wandb_run_none(self):
-        args = _make_args(wandb_allow_config=True)
-        algo_hp = build_ppo_hyperparameters(42)
-        new_args, new_hp = apply_wandb_overrides(args, algo_hp, None)
-        self.assertEqual(new_hp["learning_rate"], algo_hp["learning_rate"])
-
-    def test_override_learning_rate(self):
-        args = _make_args(algo="ppo", wandb_allow_config=True)
-        algo_hp = build_ppo_hyperparameters(42)
-        mock_run = MagicMock()
-        mock_run.config = {"learning_rate": 0.001}
-        new_args, new_hp = apply_wandb_overrides(args, algo_hp, mock_run)
-        self.assertEqual(new_hp["learning_rate"], 0.001)
-
-    def test_override_shared_param(self):
-        args = _make_args(wandb_allow_config=True)
-        algo_hp = build_ppo_hyperparameters(42)
+        config = _make_config(wandb_allow_config=False)
         mock_run = MagicMock()
         mock_run.config = {"seed": 999}
-        new_args, new_hp = apply_wandb_overrides(args, algo_hp, mock_run)
-        self.assertEqual(new_args.seed, 999)
+        new_config = apply_wandb_overrides(config, mock_run)
+        self.assertEqual(new_config.seed, config.seed)
+
+    def test_noop_when_wandb_run_none(self):
+        config = _make_config(wandb_allow_config=True)
+        new_config = apply_wandb_overrides(config, None)
+        self.assertEqual(new_config.seed, config.seed)
+
+    def test_override_shared_param(self):
+        config = _make_config(wandb_allow_config=True)
+        mock_run = MagicMock()
+        mock_run.config = {"seed": 999}
+        new_config = apply_wandb_overrides(config, mock_run)
+        self.assertEqual(new_config.seed, 999)
+
+    def test_override_sac_param(self):
+        config = _make_config(algo="sac", wandb_allow_config=True)
+        mock_run = MagicMock()
+        mock_run.config = {"sac_learning_rate": 0.001}
+        new_config = apply_wandb_overrides(config, mock_run)
+        self.assertEqual(new_config.sac_learning_rate, 0.001)
 
     def test_override_algo_switches_algorithm(self):
-        args = _make_args(algo="ppo", wandb_allow_config=True, wandb_project="proj")
-        algo_hp = build_ppo_hyperparameters(42)
+        config = _make_config(algo="ppo", wandb_allow_config=True)
         mock_run = MagicMock()
-        mock_run.config = {"algo": "sac"}
-        new_args, new_hp = apply_wandb_overrides(args, algo_hp, mock_run)
-        self.assertEqual(new_args.algo, "sac")
-        # SAC hyperparams should be returned
-        self.assertIn("buffer_size", new_hp)
-        self.assertNotIn("n_steps", new_hp)
+        mock_run.config = {"algo": "sac", "sac_batch_size": 512}
+        new_config = apply_wandb_overrides(config, mock_run)
+        self.assertEqual(new_config.algo, "sac")
+        self.assertEqual(new_config.sac_batch_size, 512)
 
 
 if __name__ == "__main__":

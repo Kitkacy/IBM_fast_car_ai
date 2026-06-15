@@ -1,34 +1,74 @@
-# TORCS RL training configuration
-# CLI arguments override these values for a given run.
+# Change this to train, evaluate, sweep, or launch
+mode: train
 
 runtime:
-  torcs_exe: "../../torcs/torcs/wtorcs.exe"
-  race_config: "../../torcs/torcs/config/raceman/practice.xml"
+  torcs_exe: "../torcs/torcs/wtorcs.exe"
+  race_config: "../torcs/torcs/config/raceman/practice.xml"
   target: native
-  gui: false
+  gui: true
   launch_log: "torcs_launcher.log"
 
 training:
   algorithm: sac
-  timesteps: 50000
+  timesteps: 12000
   seed: 42
-  checkpoint_freq: 10000
-  eval_episodes: 5
+  checkpoint_freq: 4000
   log_dir: "runs"
+  run_name: "torcs-sac"
 
 environment:
-  max_episode_steps: 5000
+  max_episode_steps: 2000
   low_progress_steps: 200
   low_progress_threshold: 5.0
 
 reward:
   track_weight: 0.3
-  heading_weight: 0.15
+  heading_weight: 0.1
   steering_weight: 0.01
+  speed_weight: 0.01
   terminal_penalty: 100.0
 
 wandb:
   enabled: true
   project: "gym-torcs"
   entity: null
-  allow_config: false
+
+evaluation:
+  model_path: null
+  eval_episodes: 1
+  eval_freq: 2000
+  max_episode_steps: 500
+
+sweep:
+  count: 16
+  method: random
+  metric:
+    name: "eval/progress_score"
+    goal: maximize
+  parameters:
+    track_weight:
+      values: [0.1, 0.3, 0.6, 1.0]
+    heading_weight:
+      values: [0.05, 0.15, 0.3, 0.6]
+    steering_weight:
+      values: [0.0, 0.01, 0.03, 0.06]
+    terminal_penalty:
+      values: [50, 100, 200, 400]
+    speed_weight:
+      values: [0.0, 0.3, .6, 1]
+  early_terminate:
+    type: hyperband
+    min_iter: 3
+
+sac:
+  learning_rate: 3.0e-4
+  buffer_size: 100000
+  learning_starts: 1000
+  batch_size: 256
+  train_freq: 1
+  gradient_steps: 1
+  gamma: 0.99
+  tau: 0.005
+  ent_coef: "auto"
+  target_entropy: "auto"
+  net_arch: [256, 256]

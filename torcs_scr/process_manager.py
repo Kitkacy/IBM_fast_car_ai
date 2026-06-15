@@ -118,18 +118,27 @@ def launch_torcs_process(
         args.extend(["-r", str(race_config)])
     if vision:
         args.append("-vision")
-
+        
     def _spawn_and_validate():
-        proc_local = subprocess.Popen(
-            args,
-            cwd=str(torcs_path.parent),
-            stdout=None,
-            stderr=None,
-            creationflags=(
+        popen_kwargs = {
+            "args": args,
+            "cwd": str(torcs_path.parent),
+            "stdout": None,
+            "stderr": None,
+        }
+        if gui:
+            popen_kwargs["creationflags"] = (
                 getattr(subprocess, "CREATE_NEW_PROCESS_GROUP", 0)
                 | getattr(subprocess, "CREATE_NEW_CONSOLE", 0)
-            ),
-        )
+            )
+        else:
+            startupinfo = subprocess.STARTUPINFO()
+            startupinfo.dwFlags |= subprocess.STARTF_USESHOWWINDOW
+            startupinfo.wShowWindow = 0  # SW_HIDE
+            popen_kwargs["startupinfo"] = startupinfo
+            popen_kwargs["creationflags"] = getattr(subprocess, "CREATE_NO_WINDOW", 0)
+
+        proc_local = subprocess.Popen(**popen_kwargs)
         write_launcher_log(log_file, f"launch command dispatched pid={proc_local.pid}")
 
         time.sleep(0.5)

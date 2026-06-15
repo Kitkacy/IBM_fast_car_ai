@@ -1,89 +1,103 @@
-"""W&B sweep support for TORCS reward tuning."""
+"""W&B sweep support driven directly from config.yaml."""
 
-import copy
+from __future__ import annotations
+
 import json
-from pathlib import Path
+from dataclasses import replace
+
+from .config import AppConfig
 
 
-def build_sweep_config(args):
-    algo = str(args.algo).lower()
-    if algo != "sac":
-        raise ValueError("Sweep generation is only supported for SAC.")
-
-    return {
-        "method": "bayes",
-        "metric": {"name": "eval/progress_distance", "goal": "maximize"},
-        "parameters": {
-            # Reward weights
-            "track_weight": {"values": [0.1, 0.3, 0.6, 1.0]},
-            "heading_weight": {"values": [0.05, 0.15, 0.3, 0.6]},
-            "steering_weight": {"values": [0.0, 0.01, 0.03, 0.06]},
-            "terminal_penalty": {"values": [50, 100, 200, 400]},
-            # SAC hyperparameters
-            "sac_learning_rate": {
-                "distribution": "log_uniform_values",
-                "min": 1e-5,
-                "max": 1e-3,
-            },
-            "sac_batch_size": {"values": [64, 128, 256, 512]},
-            "sac_buffer_size": {"values": [50_000, 100_000, 200_000]},
-            "sac_learning_starts": {"values": [500, 1000, 2000]},
-        },
-        "early_terminate": {
-            "type": "hyperband",
-            "min_iter": 3,
-        },
-    }
-
-def make_sweep_runner(base_args):
-    """Return a zero-argument callable for wandb.agent().
-
-    Each call represents one sweep trial. W&B populates wandb.config before
-    calling this function; train_and_evaluate reads those values via
-    apply_wandb_overrides (forced on by sweep_mode=True).
-    """
-    try:
-        import wandb  # noqa: F401
-    except ImportError:
-        raise RuntimeError("wandb must be installed to run sweeps: pip install wandb")
-
-    from .trainer import train_and_evaluate
-
-    def _run():
-        trial_args = copy.copy(base_args)
-        trial_args.wandb = True
-        trial_args.sweep_mode = True
-        train_and_evaluate(trial_args)
-
-    return _run
-
-
-def launch_sweep(args):
-    """Create a W&B sweep and start a local agent for *sweep_count* trials."""
+def launch_sweep(config: AppConfig):
     try:
         import wandb
     except ImportError:
         raise RuntimeError("wandb must be installed to run sweeps: pip install wandb")
 
-    sweep_config = build_sweep_config(args)
-    args.generated_sweep_config = sweep_config
+    if config.sweep is None:
+        raise ValueError("Sweep config is missing.")
+
+    sweep_config = {
+        "method": config.sweep["method"],
+        "metric": config.sweep["metric"],
+        "parameters": config.sweep["parameters"],
+    }
+    if "early_terminate" in config.sweep:
+        sweep_config["early_terminate"] = config.sweep["early_terminate"]
 
     print("[Sweep] Generated sweep config:")
     print(json.dumps(sweep_config, indent=2))
 
-    sweep_dir = Path(args.log_dir) / "sweeps"
+    sweep_dir = config.log_dir / "sweeps"
     sweep_dir.mkdir(parents=True, exist_ok=True)
-    sweep_path = sweep_dir / f"{args.algo}_sweep.json"
+    sweep_path = sweep_dir / f"{config.algo}_sweep.json"
     sweep_path.write_text(json.dumps(sweep_config, indent=2), encoding="utf-8")
 
     sweep_id = wandb.sweep(
         sweep_config,
-        project=args.wandb_project,
-        entity=getattr(args, "wandb_entity", None),
+        project=config.wandb_project,
+        entity=config.wandb_entity,
     )
     print(f"[Sweep] Created sweep ID: {sweep_id}")
     print(f"[Sweep] Config saved to: {sweep_path}")
     print(f"[Sweep] To run more agents: wandb agent {sweep_id}")
 
-    count = getattr(args, "sweep_count", None)
-    wandb.agent(sweep_id, function=make_sweep_runner(args), count=count)
+    from .trainer import train_and_evaluate
+
+    def run_trial():
+        run = getattr(wandb, "run", None)
+        created_run = run is None
+        if created_run:
+            run = wandb.init(
+                project=config.wandb_project,
+                entity=config.wandb_entity,
+                name=config.run_name,
+                job_type="training",
+                sync_tensorboard=True,
+                monitor_gym=True,
+                save_code=True,
+            )
+        try:
+            trial = dict(run.config)
+            overrides = {}
+            for key in (
+                "algo",
+                "timesteps",
+                "seed",
+                "checkpoint_freq",
+                "eval_episodes",
+                "run_name",
+                "track_weight",
+                "heading_weight",
+                "steering_weight",
+                "speed_weight",
+                "terminal_penalty",
+                "sac_learning_rate",
+                "sac_buffer_size",
+                "sac_learning_starts",
+                "sac_batch_size",
+                "sac_train_freq",
+                "sac_gradient_steps",
+                "sac_gamma",
+                "sac_tau",
+                "sac_ent_coef",
+                "sac_target_entropy",
+                "sac_net_arch",
+            ):
+                if key in trial and trial[key] is not None:
+                    value = trial[key]
+                    if key == "algo":
+                        value = str(value).lower()
+                    elif key == "sac_net_arch":
+                        value = tuple(int(item) for item in value)
+                    overrides[key] = value
+            train_and_evaluate(replace(config, **overrides))
+        finally:
+            if created_run and run is not None:
+                run.finish()
+
+    wandb.agent(
+        sweep_id,
+        function=run_trial,
+        count=config.sweep.get("count"),
+    )

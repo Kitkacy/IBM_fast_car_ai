@@ -1,0 +1,40 @@
+{
+  "eval_mean_reward": -120.00907135009766,
+  "eval_std_reward": 0.0,
+  "eval_mean_ep_length": 200.0,
+  "eval_completed_laps": 0,
+  "eval_lap_completion_rate": 0.0,
+  "eval_median_lap_time": null,
+  "eval_best_lap_time": null,
+  "eval_lap_time_iqr": null,
+  "eval_timed_laps": 0,
+  "eval_timed_lap_completion_rate": 0.0,
+  "eval_off_track_rate": 0.0,
+  "eval_mean_progress": 0.0,
+  "eval_progress_score": 0.0,
+  "eval_mean_distance_raced": 0.0,
+  "eval_mean_throttle": 0.0,
+  "eval_mean_brake": 0.9997886419296265,
+  "eval_mean_speed": 0.0,
+  "eval_max_speed": 0.0,
+  "eval_low_movement_warning": true,
+  "learning_starts": 1000,
+  "learning_started": true,
+  "episodes": [
+    {
+      "reward": -120.00907135009766,
+      "length": 200,
+      "laps_completed": 0,
+      "timed_laps": 0,
+      "last_lap_time": null,
+      "median_lap_time": null,
+      "progress_distance": 0.0,
+      "distance_raced": 0.0,
+      "mean_throttle": 0.0,
+      "mean_brake": 0.9997886419296265,
+      "mean_speed": 0.0,
+      "max_speed": 0.0,
+      "termination_reason": "low_progress"
+    }
+  ]
+}

@@ -1,7 +1,7 @@
 {
-  "method": "bayes",
+  "method": "random",
   "metric": {
-    "name": "eval/progress_distance",
+    "name": "eval/progress_score",
     "goal": "maximize"
   },
   "parameters": {
@@ -37,31 +37,12 @@
         400
       ]
     },
-    "sac_learning_rate": {
-      "distribution": "log_uniform_values",
-      "min": 1e-05,
-      "max": 0.001
-    },
-    "sac_batch_size": {
+    "speed_weight": {
       "values": [
-        64,
-        128,
-        256,
-        512
-      ]
-    },
-    "sac_buffer_size": {
-      "values": [
-        50000,
-        100000,
-        200000
-      ]
-    },
-    "sac_learning_starts": {
-      "values": [
-        500,
-        1000,
-        2000
+        0.0,
+        0.3,
+        0.6,
+        1
       ]
     }
   },

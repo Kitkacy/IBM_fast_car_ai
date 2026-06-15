@@ -5,8 +5,6 @@ import gymnasium as gym
 import numpy as np
 from gymnasium import spaces
 
-from .config import DEFAULT_LOW_PROGRESS_STEPS, DEFAULT_LOW_PROGRESS_THRESHOLD
-
 MONITOR_INFO_KEYS = (
     "laps_completed",
     "last_lap_time",
@@ -34,21 +32,25 @@ class TorcsRLEnv(gym.Env):
         track_weight=0.3,
         heading_weight=0.15,
         steering_weight=0.01,
+        speed_weight=0.05,
         terminal_penalty=100.0,
         max_episode_steps=4000,
-        low_progress_steps=DEFAULT_LOW_PROGRESS_STEPS,
-        low_progress_threshold=DEFAULT_LOW_PROGRESS_THRESHOLD,
+        low_progress_steps=150,
+        low_progress_threshold=10.0,
     ):
         self.runtime_backend = runtime_backend
         self.runtime_target = self.runtime_backend.name
         self.torcs_exe = str(Path(torcs_exe).expanduser()) if torcs_exe else ""
         self.race_config = str(Path(race_config).expanduser()) if race_config else ""
-        self.launch_log = Path(__file__).resolve().parent.parent / launch_log
+        self.launch_log = Path(launch_log).expanduser()
+        if not self.launch_log.is_absolute():
+            self.launch_log = Path(__file__).resolve().parent.parent / self.launch_log
         self.gui = bool(gui)
 
         self.track_weight = float(track_weight)
         self.heading_weight = float(heading_weight)
         self.steering_weight = float(steering_weight)
+        self.speed_weight = float(speed_weight)
         self.terminal_penalty = float(terminal_penalty)
 
         self.max_episode_steps = int(max_episode_steps)
@@ -97,9 +99,21 @@ class TorcsRLEnv(gym.Env):
         self.time_step = 0
         self._reset_episode_metrics()
 
+        previous_client = self.client
+        previous_pid = self.torcs_pid
         if not self.initial_reset:
-            self.client.R.d["meta"] = True
-            self.client.respond_to_server()
+            try:
+                previous_client.R.d["meta"] = True
+                previous_client.respond_to_server()
+            except Exception:
+                pass
+            try:
+                previous_client.shutdown()
+            except Exception:
+                pass
+            if previous_pid is not None:
+                self.runtime_backend.kill_process(previous_pid, log_file=str(self.launch_log), port=self.port)
+                self.torcs_pid = None
 
         self.client = self.runtime_backend.create_client(
             port=self.port,
@@ -214,7 +228,13 @@ class TorcsRLEnv(gym.Env):
         elif self.speed_went_above_threshold:
             self.steps_below_min_speed += 1
 
+        # Scaled speed reward: forward speed (speed_x * cos(angle)) normalized by speed_scale
+        cos_angle = np.cos(float(raw_obs["angle"]))
+        forward_speed = speed_x * max(cos_angle, 0.0)
+        speed_reward = self.speed_weight * (forward_speed / self.speed_scale)
+
         reward = progress_delta
+        reward += speed_reward
         reward -= self.track_weight * track_pos
         reward -= self.heading_weight * angle
         reward -= self.steering_weight * abs(steer - self.prev_steer)
@@ -222,9 +242,13 @@ class TorcsRLEnv(gym.Env):
         terminated = False
         termination_reason = "in_progress"
         track = np.asarray(raw_obs["track"], dtype=np.float32)
-        if track.min() < 0 or track_pos > 1.0:
+        track_min = float(track.min())
+        if track_pos > 1.0:
             terminated = True
             termination_reason = "off_track"
+        elif track_min <= 0.0:
+            terminated = True
+            termination_reason = "collision"
         elif np.cos(float(raw_obs["angle"])) < 0.0:
             terminated = True
             termination_reason = "wrong_direction"

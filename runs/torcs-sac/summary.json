@@ -1,15 +1,17 @@
 {
+  "mode": "train",
   "algo": "sac",
-  "timesteps": 1051,
+  "timesteps": 2010,
   "runtime_target": "native",
   "gui": true,
   "reward_weights": {
     "track_weight": 0.3,
-    "heading_weight": 0.15,
+    "heading_weight": 0.1,
     "steering_weight": 0.01,
+    "speed_weight": 0.01,
     "terminal_penalty": 100.0
   },
   "interrupted": true,
-  "latest_model_path": "runs\\torcs-sac\\models\\sac_torcs_latest.zip",
-  "resumed_from": "runs\\torcs-sac\\models\\sac_torcs_latest.zip"
+  "latest_model_path": "C:\\Users\\szymo\\source\\repos\\IBM_fast_car_ai\\runs\\torcs-sac\\models\\sac_torcs_latest.zip",
+  "resumed_from": "C:\\Users\\szymo\\source\\repos\\IBM_fast_car_ai\\runs\\torcs-sac\\models\\sac_torcs_latest.zip"
 }
