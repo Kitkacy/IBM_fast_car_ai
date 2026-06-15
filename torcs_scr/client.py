@@ -5,7 +5,7 @@ import sys
 import time
 from pathlib import Path
 
-from .process_manager import launch_torcs_process
+from .process_manager import kill_torcs_process, launch_torcs_process
 
 from .constants import PI, data_size, usage, version
 from .state import DriverAction, ServerState
@@ -26,7 +26,7 @@ class Client:
         launch_log="torcs_launcher.log",
         race_config="",
         autostart_script="",
-        launch_on_start=False,
+        gui=False,
         parse_command_line=False,
     ):
         self.vision = vision
@@ -39,7 +39,7 @@ class Client:
         self.stage = 3
         self.debug = False
         self.maxSteps = 100000
-        self.launch_on_start = bool(launch_on_start)
+        self.gui = bool(gui)
         self.torcs_pid = None
         self.torcs_exe = str(Path(torcs_exe).expanduser()) if torcs_exe else ""
         self.launch_log = str(Path(launch_log).expanduser()) if launch_log else str(Path(__file__).resolve().parent.parent / "torcs_launcher.log")
@@ -69,10 +69,16 @@ class Client:
         self.S = ServerState()
         self.R = DriverAction()
 
-        if self.launch_on_start:
+        if self.torcs_exe:
             self._launch_managed_torcs()
 
-        self.setup_connection()
+        try:
+            self.setup_connection()
+        except Exception:
+            if self.torcs_pid is not None:
+                kill_torcs_process(self.torcs_pid, log_file=self.launch_log, port=self.port)
+                self.torcs_pid = None
+            raise
 
     def _launch_managed_torcs(self):
         if not self.torcs_exe:
@@ -83,6 +89,7 @@ class Client:
             port=self.port,
             vision=self.vision,
             race_config=self.race_config,
+            gui=self.gui,
             log_file=self.launch_log,
             autostart_script=self.autostart_script,
             existing_pid=self.torcs_pid,
@@ -110,7 +117,9 @@ class Client:
             sys.exit(-1)
         self.so.settimeout(1)
 
-        n_fail = 5
+        failures = 0
+        # GUI mode takes much longer for TORCS to render and start the SCR server
+        max_failures = 600 if self.gui else 60
         while True:
             a = "-45 -19 -12 -7 -4 -2.5 -1.7 -1 -.5 0 .5 1 1.7 2.5 4 7 12 19 45"
             initmsg = "%s(init %s)" % (self.sid, a)
@@ -125,12 +134,14 @@ class Client:
                 sockdata = sockdata.decode("utf-8")
             except socket.error:
                 print("Waiting for server on %d............" % self.port)
-                # print("Count Down : " + str(n_fail))
-                # if n_fail < 0:
-                #     print("relaunch torcs")
-                #     self._relaunch_torcs()
-                #     n_fail = 5
-                # n_fail -= 1
+                failures += 1
+                if failures >= max_failures:
+                    self.so.close()
+                    self.so = None
+                    raise TimeoutError(
+                        f"TORCS server did not respond on port {self.port}. "
+                        "Another local TORCS run may already own the port, or TORCS started without the SCR server becoming reachable."
+                    )
 
             if "***identified***" in sockdata:
                 print("Client connected on %d.............." % self.port)

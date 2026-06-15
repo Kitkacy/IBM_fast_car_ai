@@ -1,0 +1,34 @@
+# TORCS RL training configuration
+# CLI arguments override these values for a given run.
+
+runtime:
+  torcs_exe: "../../torcs/torcs/wtorcs.exe"
+  race_config: "../../torcs/torcs/config/raceman/practice.xml"
+  target: native
+  gui: false
+  launch_log: "torcs_launcher.log"
+
+training:
+  algorithm: sac
+  timesteps: 50000
+  seed: 42
+  checkpoint_freq: 10000
+  eval_episodes: 5
+  log_dir: "runs"
+
+environment:
+  max_episode_steps: 5000
+  low_progress_steps: 200
+  low_progress_threshold: 5.0
+
+reward:
+  track_weight: 0.3
+  heading_weight: 0.15
+  steering_weight: 0.01
+  terminal_penalty: 100.0
+
+wandb:
+  enabled: true
+  project: "gym-torcs"
+  entity: null
+  allow_config: false

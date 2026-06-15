@@ -21,7 +21,16 @@ class TorcsRuntimeBackend(ABC):
         return ""
 
     @abstractmethod
-    def create_client(self, *, port: int, vision: bool, torcs_exe: str, launch_log: str, race_config: str) -> TorcsClientProtocol:
+    def create_client(
+        self,
+        *,
+        port: int,
+        vision: bool,
+        torcs_exe: str,
+        launch_log: str,
+        race_config: str,
+        gui: bool,
+    ) -> TorcsClientProtocol:
         ...
 
     def kill_process(self, pid, *, port=None, log_file=None) -> bool:

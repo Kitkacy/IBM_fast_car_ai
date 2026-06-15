@@ -1,0 +1,45 @@
+{
+  "method": "bayes",
+  "metric": {
+    "name": "eval/progress_distance",
+    "goal": "maximize"
+  },
+  "parameters": {
+    "track_weight": {
+      "values": [
+        0.1,
+        0.3,
+        0.6,
+        1.0
+      ]
+    },
+    "heading_weight": {
+      "values": [
+        0.05,
+        0.15,
+        0.3,
+        0.6
+      ]
+    },
+    "steering_weight": {
+      "values": [
+        0.0,
+        0.01,
+        0.03,
+        0.06
+      ]
+    },
+    "terminal_penalty": {
+      "values": [
+        50,
+        100,
+        200,
+        400
+      ]
+    }
+  },
+  "early_terminate": {
+    "type": "hyperband",
+    "min_iter": 3
+  }
+}

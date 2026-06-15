@@ -35,7 +35,10 @@ class TestClientConnection(unittest.TestCase):
         server = MockTorcsServer(port=3002)
         try:
             # We don't want it to launch TORCS
-            client = Client(p=3002, launch_on_start=False)
+            client = Client(p=3002)
+            # Prevent auto-launch
+            client.torcs_exe = ""
+            client.setup_connection()
             self.assertIsNotNone(client.so)
         finally:
             server.stop()

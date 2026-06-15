@@ -1,0 +1,3 @@
+#{"t_start": 1781475654.0308487, "env_id": "None"}
+r,l,t,laps_completed,last_lap_time,progress_distance,distance_raced,mean_throttle,mean_brake,mean_speed,max_speed,termination_reason
+-341.8447,516,6.570943,0,nan,34.3587,34.3587,0.24572281135145083,0.23498478254606558,11.75640439651164,18.5478,off_track

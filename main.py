@@ -1,10 +1,12 @@
 import argparse
 
 from torcs_rl import parse_args, train_and_evaluate
+from torcs_rl.config import build_config_namespace
 
 
 def main() -> None:
-    args = parse_args()
+    cli_args = parse_args()
+    args = build_config_namespace(cli_args)
 
     if args.sweep:
         from torcs_rl.sweep import launch_sweep

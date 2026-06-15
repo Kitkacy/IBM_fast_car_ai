@@ -18,3 +18,6 @@ wandb/*
 runs/tensorboard/*
 
 __pycache__
+torcs_launcher.log
+*.zip
+*.lock

@@ -1,0 +1,15 @@
+{
+  "algo": "sac",
+  "timesteps": 1051,
+  "runtime_target": "native",
+  "gui": true,
+  "reward_weights": {
+    "track_weight": 0.3,
+    "heading_weight": 0.15,
+    "steering_weight": 0.01,
+    "terminal_penalty": 100.0
+  },
+  "interrupted": true,
+  "latest_model_path": "runs\\torcs-sac\\models\\sac_torcs_latest.zip",
+  "resumed_from": "runs\\torcs-sac\\models\\sac_torcs_latest.zip"
+}

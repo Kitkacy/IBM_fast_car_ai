@@ -1,8 +1,11 @@
 import argparse
+import json
 from pathlib import Path
 from typing import Any
 
 from stable_baselines3 import PPO, SAC, TD3
+
+from .config import REWARD_WEIGHTS
 
 try:
     from rl_zoo3.utils import linear_schedule
@@ -91,22 +94,18 @@ def to_json_serializable(value: Any):
 
 
 def build_wandb_run_config(args, algo_hyperparameters):
-    base = {
-        "algo": args.algo,
-        "timesteps": int(args.timesteps),
-        "run_name": args.run_name,
-        "target_speed": float(args.target_speed),
-        "vision": bool(args.vision),
-        "seed": int(args.seed),
-        "eval_episodes": int(args.eval_episodes),
-        "checkpoint_freq": int(args.checkpoint_freq),
-        "runtime_target": str(args.runtime_target),
-        "train_port": int(args.train_port),
-        "eval_port": int(args.eval_port),
-        "algorithm_hyperparameters": to_json_serializable(algo_hyperparameters),
+    scalar_keys = (
+        "algo", "timesteps", "seed", "eval_episodes", "checkpoint_freq",
+        "runtime_target", "run_name", "gui",
+    )
+    base = {k: to_json_serializable(getattr(args, k, None)) for k in scalar_keys}
+    base["reward_weights"] = {
+        k: float(getattr(args, k, v))
+        for k, v in REWARD_WEIGHTS.items()
+        if hasattr(args, k)
     }
-    for key, value in algo_hyperparameters.items():
-        base[f"{args.algo}_{key}"] = to_json_serializable(value)
+    base["algorithm_hyperparameters"] = to_json_serializable(algo_hyperparameters)
+    base.update(algo_hyperparameters)
     return base
 
 

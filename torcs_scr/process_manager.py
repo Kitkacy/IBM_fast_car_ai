@@ -75,6 +75,7 @@ def launch_torcs_process(
     port=3001,
     vision=False,
     race_config="",
+    gui=False,
     log_file=None,
     autostart_script=None,
     existing_pid=None,
@@ -88,6 +89,8 @@ def launch_torcs_process(
         if not race_config_path.exists():
             raise FileNotFoundError(f"Race config not found: {race_config_path}")
 
+    if gui:
+        race_config = ""
     has_race_config = bool(race_config and str(race_config).strip())
 
     write_launcher_log(log_file, "begin launcher")
@@ -95,6 +98,7 @@ def launch_torcs_process(
     write_launcher_log(log_file, f"PORT={int(port)}")
     write_launcher_log(log_file, f"VISION_FLAG={'vision' if vision else 'novision'}")
     write_launcher_log(log_file, f"RACE_CONFIG={race_config}")
+    write_launcher_log(log_file, f"GUI={int(bool(gui))}")
 
     if existing_pid is not None:
         kill_torcs_process(existing_pid, log_file=log_file, port=port)
@@ -155,7 +159,7 @@ def launch_torcs_process(
         script_path = Path(autostart_script).expanduser() if autostart_script else None
         time.sleep(1.1)
         if script_path and script_path.exists():
-            subprocess.run(
+            completed = subprocess.run(
                 [
                     "powershell",
                     "-NoProfile",
@@ -168,6 +172,12 @@ def launch_torcs_process(
                 stderr=subprocess.DEVNULL,
                 check=False,
             )
+            if completed.returncode != 0:
+                write_launcher_log(log_file, f"autostart script failed: {script_path} exit_code={completed.returncode}")
+                raise RuntimeError(
+                    f"TORCS GUI launch failed while running {script_path}. "
+                    f"Check {_log_path(log_file)}"
+                )
             write_launcher_log(log_file, f"autostart script finished: {script_path}")
         else:
             write_launcher_log(log_file, "autostart script missing or empty")

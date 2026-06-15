@@ -21,14 +21,23 @@ class NativeTorcsRuntimeBackend(TorcsRuntimeBackend):
     def default_autostart_script(self) -> str:
         return str(Path(__file__).resolve().parents[2] / "autostart_windows.ps1")
 
-    def create_client(self, *, port: int, vision: bool, torcs_exe: str, launch_log: str, race_config: str):
+    def create_client(
+        self,
+        *,
+        port: int,
+        vision: bool,
+        torcs_exe: str,
+        launch_log: str,
+        race_config: str,
+        gui: bool,
+    ):
         return Client(
             p=port,
             vision=vision,
             torcs_exe=torcs_exe,
             launch_log=launch_log,
             race_config=race_config,
-            launch_on_start=True,
+            gui=gui,
             parse_command_line=False,
         )
 
