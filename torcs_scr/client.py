@@ -66,13 +66,26 @@ class Client:
     methods to interact with the SCR server across episodes.
     """
 
-    def __init__(self, *, torcs_exe, port=3001, race_config="", gui=False, launch_log="torcs_launcher.log"):
+    def __init__(
+        self,
+        *,
+        torcs_exe,
+        port=3001,
+        race_config="",
+        gui=False,
+        launch_log="torcs_launcher.log",
+        autostart_script="",
+    ):
         self.port = int(port)
         self.host = "localhost"
         self.gui = bool(gui)
         self.torcs_exe = str(Path(torcs_exe).expanduser().resolve())
         self.race_config = str(Path(race_config).expanduser().resolve()) if race_config else ""
         self.log_file = str(Path(launch_log).expanduser()) if launch_log else ""
+        if autostart_script:
+            self.autostart_script = str(Path(autostart_script).expanduser())
+        else:
+            self.autostart_script = str(Path(__file__).resolve().parent.parent / "autostart_windows.ps1")
 
         self.torcs_pid = None
         self.so = None
@@ -94,7 +107,7 @@ class Client:
         if not torcs_path.exists():
             raise FileNotFoundError(f"TORCS executable not found: {torcs_path}")
 
-        has_race_config = bool(self.race_config)
+        has_race_config = bool(self.race_config) and not self.gui
         if has_race_config:
             race_path = Path(self.race_config)
             if not race_path.exists():
@@ -103,7 +116,9 @@ class Client:
         _write_log(self.log_file, "begin launch")
         _write_log(self.log_file, f"exe={torcs_path}")
         _write_log(self.log_file, f"port={self.port}")
-        _write_log(self.log_file, f"race_config={self.race_config or '(none)'}")
+        if self.gui and self.race_config:
+            _write_log(self.log_file, "gui mode active: ignoring race_config and using window autostart")
+        _write_log(self.log_file, f"race_config={self.race_config if has_race_config else '(none)'}")
         _write_log(self.log_file, f"gui={self.gui}")
 
         # kill any stale process holding the port
@@ -154,6 +169,28 @@ class Client:
                 )
 
         self.torcs_pid = proc.pid
+        if self.gui:
+            script_path = Path(self.autostart_script).expanduser()
+            time.sleep(1.1)
+            if not script_path.exists():
+                raise FileNotFoundError(f"GUI autostart script not found: {script_path}")
+            completed = subprocess.run(
+                [
+                    "powershell",
+                    "-NoProfile",
+                    "-ExecutionPolicy",
+                    "Bypass",
+                    "-File",
+                    str(script_path),
+                ],
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+                check=False,
+            )
+            if completed.returncode != 0:
+                raise RuntimeError(
+                    f"TORCS GUI launch failed while running {script_path}. Check {self.log_file}"
+                )
         _write_log(self.log_file, "launch ok")
 
     def _kill_torcs(self):
